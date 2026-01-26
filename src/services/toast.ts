@@ -98,7 +98,15 @@ class ToastServiceClass {
       );
 
       if (!response.ok) {
-        throw new Error(`Toast API error: ${response.status} ${response.statusText}`);
+        // Try to get error details from response body
+        let errorDetails = '';
+        try {
+          const errorBody = await response.text();
+          errorDetails = errorBody ? ` - ${errorBody}` : '';
+        } catch (e) {
+          // Ignore if we can't read the error body
+        }
+        throw new Error(`Toast API error: ${response.status} ${response.statusText}${errorDetails}`);
       }
 
       const data = await response.json() as ToastAvailabilityResponse;
@@ -153,7 +161,15 @@ class ToastServiceClass {
       );
 
       if (!response.ok) {
-        throw new Error(`Toast API error: ${response.status} ${response.statusText}`);
+        // Try to get error details from response body
+        let errorDetails = '';
+        try {
+          const errorBody = await response.text();
+          errorDetails = errorBody ? ` - ${errorBody}` : '';
+        } catch (e) {
+          // Ignore if we can't read the error body
+        }
+        throw new Error(`Toast API error: ${response.status} ${response.statusText}${errorDetails}`);
       }
 
       const data = await response.json() as ToastMenusResponse;
