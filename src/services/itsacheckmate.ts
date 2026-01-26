@@ -48,7 +48,7 @@ class ItsacheckmateServiceClass {
     const { order, customer, paymentInfo } = payload;
 
     // Build the order payload for Itsacheckmate API
-    const orderPayload = {
+    const orderPayload: any = {
       restaurantGuid: credentials.restaurant_guid,
       externalOrderId: order.order_number,
       orderType: order.order_type === 'pickup' ? 'PICKUP' : 'DELIVERY',
@@ -111,11 +111,11 @@ class ItsacheckmateServiceClass {
       });
 
       if (!response.ok) {
-        const error = await response.json();
+        const error: any = await response.json();
         throw new Error(`Itsacheckmate API error: ${error.message || response.statusText}`);
       }
 
-      const result = await response.json();
+      const result: any = await response.json();
 
       return {
         success: true,
@@ -125,7 +125,7 @@ class ItsacheckmateServiceClass {
         paymentTransactionId: result.paymentTransactionId,
         message: result.message,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Itsacheckmate order creation failed:', error);
       throw error;
     }
@@ -147,7 +147,7 @@ class ItsacheckmateServiceClass {
         throw new Error(`Failed to get order status: ${response.statusText}`);
       }
 
-      const result = await response.json();
+      const result: any = await response.json();
 
       return {
         orderGuid: result.orderGuid,
@@ -156,7 +156,7 @@ class ItsacheckmateServiceClass {
         paymentStatus: result.paymentStatus,
         estimatedReadyTime: result.estimatedReadyTime,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to get order status:', error);
       throw error;
     }
@@ -178,9 +178,9 @@ class ItsacheckmateServiceClass {
         throw new Error(`Failed to cancel order: ${response.statusText}`);
       }
 
-      const result = await response.json();
+      const result: any = await response.json();
       return result;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to cancel order:', error);
       throw error;
     }
@@ -209,14 +209,14 @@ class ItsacheckmateServiceClass {
         throw new Error(`Failed to refund order: ${response.statusText}`);
       }
 
-      const result = await response.json();
+      const result: any = await response.json();
       return {
         success: true,
         refundId: result.refundId,
         amount: result.amount,
         status: result.status,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to refund order:', error);
       throw error;
     }

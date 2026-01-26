@@ -1,5 +1,5 @@
 import twilio from 'twilio';
-import { VoiceResponse } from 'twilio/lib/twiml/VoiceResponse';
+import VoiceResponse = require('twilio/lib/twiml/VoiceResponse');
 import WebSocket from 'ws';
 import { AIService } from './ai';
 import { Database } from '../database/client';

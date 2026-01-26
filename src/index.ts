@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import expressWs from 'express-ws';
 import { voiceRouter } from './routes/voice';
 import { ordersRouter } from './routes/orders';
 import { reservationsRouter } from './routes/reservations';
@@ -10,7 +11,7 @@ import { Database } from './database/client';
 
 dotenv.config();
 
-const app = express();
+const { app } = expressWs(express());
 const PORT = process.env.PORT || 3000;
 
 // Middleware

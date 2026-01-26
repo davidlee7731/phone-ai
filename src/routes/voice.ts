@@ -1,7 +1,7 @@
 import express from 'express';
 import { TwilioService } from '../services/twilio';
 import { CallService } from '../services/calls';
-import { VoiceResponse } from 'twilio/lib/twiml/VoiceResponse';
+import VoiceResponse = require('twilio/lib/twiml/VoiceResponse');
 
 export const voiceRouter = express.Router();
 

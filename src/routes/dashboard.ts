@@ -73,7 +73,7 @@ dashboardRouter.get('/revenue', async (req, res, next) => {
 
     const revenue = await DashboardService.getRevenueMetrics({
       restaurantId: restaurantId as string,
-      period: (period as string) || 'week', // 'day', 'week', 'month', 'year'
+      period: (period as 'day' | 'week' | 'month' | 'year') || 'week',
     });
 
     res.json(revenue);
