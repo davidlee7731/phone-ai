@@ -10,6 +10,7 @@
     "db:migrate": "tsx src/database/migrate.ts",
     "db:seed": "tsx src/database/seed.ts",
     "db:update-toast": "node scripts/update-toast-credentials.js",
+    "db:diagnose": "node scripts/diagnose-menu.js",
     "test": "jest"
   },
   "keywords": [
