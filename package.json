@@ -11,6 +11,7 @@
     "db:seed": "tsx src/database/seed.ts",
     "db:update-toast": "node scripts/update-toast-credentials.js",
     "db:diagnose": "node scripts/diagnose-menu.js",
+    "db:fix-pos": "node scripts/fix-pos-system.js",
     "test": "jest"
   },
   "keywords": [
