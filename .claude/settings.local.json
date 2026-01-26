@@ -6,7 +6,10 @@
       "Bash(git push:*)",
       "Bash(npm run build:*)",
       "WebFetch(domain:university.bland.ai)",
-      "WebFetch(domain:docs.bland.ai)"
+      "WebFetch(domain:docs.bland.ai)",
+      "WebFetch(domain:doc.toasttab.com)",
+      "WebFetch(domain:toastintegrations.redoc.ly)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

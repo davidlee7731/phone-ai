@@ -6,9 +6,8 @@ A full-featured AI-powered phone answering system for restaurants, similar to Lo
 
 ## Features
 
-- **Intelligent Voice AI**: Natural conversation powered by OpenAI GPT-4 and TTS
-- **Order Management**: Take pickup and delivery orders with payment processing
-- **Reservations**: Book tables and manage reservations automatically
+- **Intelligent Voice AI**: Natural conversation powered by Bland.ai
+- **Order Management**: Take pickup and delivery orders with automatic POS injection
 - **POS Integration**: Sync orders to Square, Toast (via Itsacheckmate), and Clover
 - **Payment Processing**: Multiple options - Toast POS payment processor (via Itsacheckmate) or Stripe
 - **Analytics Dashboard**: Track calls, revenue, conversion rates, and customer data
@@ -18,8 +17,8 @@ A full-featured AI-powered phone answering system for restaurants, similar to Lo
 ## Tech Stack
 
 - **Backend**: Node.js, TypeScript, Express
-- **Database**: PostgreSQL, Redis
-- **Voice**: Twilio, OpenAI Realtime API
+- **Database**: PostgreSQL
+- **Voice AI**: Bland.ai with Twilio phone numbers
 - **Payments**: Stripe (optional) or Toast POS via Itsacheckmate
 - **POS Integration**: Square API, Itsacheckmate (Toast), Clover API
 
@@ -60,16 +59,16 @@ Deploy your Node.js app on one of these:
 **Minimal Setup (Free Tier):**
 - Railway Free Tier: $0 (limited hours)
 - Twilio: ~$1-5 (depends on usage)
-- OpenAI: Pay per call (~$0.10-0.50 per call)
+- Bland.ai: Pay per call (~$0.09 per minute)
 - Itsacheckmate: ~$0.50-1.50 per order
 - **Total: ~$50-100/month** for low volume (50-100 calls)
 
 **Production Setup:**
 - Railway/Render: $20-40/month
 - Twilio: $20-50/month (100-300 calls)
-- OpenAI: $50-200/month
+- Bland.ai: ~$50-150/month
 - Itsacheckmate: Variable based on orders
-- **Total: ~$150-400/month** for medium volume (500-1000 calls)
+- **Total: ~$150-350/month** for medium volume (500-1000 calls)
 
 ## Prerequisites
 
@@ -77,13 +76,12 @@ Before you begin, ensure you have:
 
 - Node.js 18+ installed
 - **Cloud Database**: Choose one of these PostgreSQL providers:
-  - [Supabase](https://supabase.com/) - Free tier available, includes Redis alternative
+  - [Supabase](https://supabase.com/) - Free tier available
   - [Neon](https://neon.tech/) - Serverless PostgreSQL, generous free tier
-  - [Railway](https://railway.app/) - Easy setup, includes PostgreSQL + Redis
+  - [Railway](https://railway.app/) - Easy setup, includes PostgreSQL
   - [Render](https://render.com/) - Free PostgreSQL tier available
-- **Redis**: Use [Upstash Redis](https://upstash.com/) (serverless, free tier) or include with Railway/Render
 - Twilio account with phone number
-- OpenAI API key
+- **Bland.ai account** - Sign up at [bland.ai](https://bland.ai)
 - **For Toast POS users**: Itsacheckmate account (handles both orders AND payments through Toast)
 - **For other POS systems**: Stripe account for payment processing
 - (Optional) Square or Clover POS credentials
@@ -117,12 +115,11 @@ TWILIO_ACCOUNT_SID=your_twilio_account_sid
 TWILIO_AUTH_TOKEN=your_twilio_auth_token
 TWILIO_PHONE_NUMBER=+15551234567
 
-# OpenAI Configuration
-OPENAI_API_KEY=sk-your-openai-api-key
+# Bland AI Configuration
+BLAND_API_KEY=your_bland_api_key
 
 # Database Configuration
 DATABASE_URL=postgresql://user:password@localhost:5432/phone_agent
-REDIS_URL=redis://localhost:6379
 
 # Stripe Configuration
 STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
@@ -177,21 +174,22 @@ Seed with sample data (optional):
 npm run db:seed
 ```
 
-### 4. Configure Twilio Webhooks
+### 4. Configure Bland.ai with Your Twilio Number
 
-You'll need to expose your local server to the internet. Use ngrok:
+1. **Get your public URL** (for local development, use ngrok):
+   ```bash
+   ngrok http 3000
+   ```
 
-```bash
-ngrok http 3000
-```
+2. **Set up Bland.ai:**
+   - Go to [bland.ai](https://bland.ai) dashboard
+   - Import your Twilio phone number using "Bring Your Own Twilio" (BYOT)
+   - Configure webhook URL: `https://your-domain.ngrok.io/voice/bland-webhook`
+   - The system will automatically generate task instructions from your restaurant database
 
-Then configure Twilio webhooks:
+3. Update `WEBHOOK_BASE_URL` in `.env` with your ngrok URL.
 
-1. Go to your Twilio phone number settings
-2. Set "A Call Comes In" webhook to: `https://your-domain.ngrok.io/voice/incoming`
-3. Set "Call Status Changes" webhook to: `https://your-domain.ngrok.io/voice/status`
-
-Update `WEBHOOK_BASE_URL` in `.env` with your ngrok URL.
+Your Twilio number will now route calls through Bland.ai for voice processing, then send webhooks to your server for order processing and POS integration.
 
 ## Running the Application
 
@@ -298,12 +296,47 @@ WHERE id = 'your_restaurant_id';
 2. Get API credentials
 3. Update restaurant settings similarly
 
+## How Order Injection Works
+
+When a customer places an order over the phone, the system automatically:
+
+1. **AI Collects Order Details**: Bland.ai conversation collects:
+   - Menu items and quantities
+   - Customer name and phone
+   - Pickup or delivery preference
+   - Delivery address (if applicable)
+   - Payment information (if provided)
+
+2. **Structured Data Extraction**: The AI formats order data in a structured JSON format at the end of the call
+
+3. **Webhook Processing**: When the call ends, Bland.ai sends a webhook to your server with the full transcript
+
+4. **Order Parsing**: Your server extracts the structured order data from the transcript
+
+5. **Database Creation**: The order is saved to your PostgreSQL database with:
+   - Order items, pricing, and totals
+   - Customer information
+   - Link to the call transcript
+
+6. **POS Injection**: The order is automatically synced to your POS:
+   - **Toast**: Via Itsacheckmate API (includes payment processing)
+   - **Square**: Via Square Orders API
+   - **Clover**: Via Clover Orders API
+
+7. **Payment Processing**:
+   - **Toast users**: Payment processed through Toast's payment processor via Itsacheckmate
+   - **Others**: Payment processed through Stripe
+
+8. **Confirmation**: Order appears in your POS system ready for kitchen preparation
+
+All of this happens automatically within seconds after the call ends, with no manual intervention required.
+
 ## API Endpoints
 
 ### Voice Endpoints
-- `POST /voice/incoming` - Handle incoming calls
-- `POST /voice/status` - Call status updates
-- `WS /voice/stream` - Media stream WebSocket
+- `POST /voice/bland-webhook` - Receive call events from Bland.ai
+- `GET /voice/task/:phoneNumber` - Get AI task instructions for a restaurant
+- `POST /voice/status` - Call status updates (legacy)
 
 ### Order Endpoints
 - `GET /api/orders?restaurantId={id}` - Get all orders
@@ -362,18 +395,22 @@ phone-agent/
 
 ### Call Flow
 
-1. **Incoming Call**: Customer calls restaurant phone number
-2. **Twilio Routes**: Call routed to your server via webhook
-3. **Stream Setup**: Twilio establishes WebSocket media stream
-4. **AI Processing**:
-   - Audio streamed to OpenAI for transcription
-   - GPT-4 processes intent (order, reservation, question)
-   - Response generated and converted to speech
-5. **Action Execution**:
-   - Orders: Collect items, process payment, sync to POS
-   - Reservations: Check availability, book table, send confirmation
-   - Questions: Answer from menu/hours database
-6. **Completion**: Call ends, transcript saved, analytics updated
+1. **Incoming Call**: Customer calls restaurant phone number (Twilio)
+2. **AI Processing**: Bland.ai handles the entire conversation:
+   - Speech-to-text transcription
+   - AI understands intent (order, question, etc.)
+   - Text-to-speech response generation
+   - Natural conversation flow
+3. **Webhook Notification**: When call completes, Bland.ai sends webhook to your server with:
+   - Full call transcript
+   - Call duration and metadata
+   - Structured order data (if order was placed)
+4. **Order Processing**:
+   - Server parses order from transcript
+   - Creates order in database
+   - Syncs to Toast POS via Itsacheckmate
+   - Processes payment through Toast payment processor
+5. **Completion**: Transcript and analytics saved to database
 
 ### AI Conversation Design
 
@@ -395,6 +432,67 @@ The system maintains conversation context and can handle multi-turn dialogues na
 
 ## Customization
 
+### Configure Business Hours
+
+The system supports **two methods** for checking if your restaurant is open:
+
+#### Option 1: Dynamic Toast API Integration (Recommended for Toast users)
+
+If you have a Toast Standard API key, the system will automatically check Toast's real-time availability API to see if your restaurant is open. This is perfect for handling early closures or unexpected changes.
+
+```sql
+UPDATE restaurants
+SET
+  timezone = 'America/New_York',
+  pos_system = 'toast',
+  pos_credentials = jsonb_build_object(
+    'itsacheckmate_api_key', 'your_itsacheckmate_key',
+    'itsacheckmate_restaurant_guid', 'your_itsacheckmate_guid',
+    'toast_api_key', 'your_toast_standard_api_key',  -- Add this for real-time checking
+    'toast_restaurant_guid', 'your_toast_restaurant_guid'  -- Add this too
+  )
+WHERE id = 'your_restaurant_id';
+```
+
+**How it works:**
+- Every call checks Toast's `/restaurant-availability/v1/availability` endpoint
+- Returns `ONLINE` or `OFFLINE` status in real-time
+- Caches result for 10 minutes (Toast recommendation)
+- Falls back to database hours if Toast API is unavailable
+
+**Benefits:**
+- Handles early closures automatically (close at 8 PM instead of scheduled 10 PM)
+- No manual updates needed when you close unexpectedly
+- Always reflects your current Toast POS status
+
+#### Option 2: Database Business Hours (Fallback)
+
+If you don't have Toast API access or use a different POS, configure static hours in the database:
+
+```sql
+UPDATE restaurants
+SET
+  timezone = 'America/New_York',  -- Your restaurant's timezone
+  business_hours = jsonb_build_object(
+    'monday', jsonb_build_object('open', '09:00', 'close', '22:00'),
+    'tuesday', jsonb_build_object('open', '09:00', 'close', '22:00'),
+    'wednesday', jsonb_build_object('open', '09:00', 'close', '22:00'),
+    'thursday', jsonb_build_object('open', '09:00', 'close', '22:00'),
+    'friday', jsonb_build_object('open', '09:00', 'close', '23:00'),
+    'saturday', jsonb_build_object('open', '10:00', 'close', '23:00'),
+    'sunday', jsonb_build_object('open', '10:00', 'close', '21:00')
+  )
+WHERE id = 'your_restaurant_id';
+```
+
+**When closed, the AI will:**
+- Politely inform callers the restaurant is closed
+- Provide business hours and next opening time
+- Answer questions about menu and location
+- Refuse to take orders or process payments
+
+**Priority:** Toast API (if configured) → Database hours (fallback)
+
 ### Customize Restaurant Greeting
 
 Update the restaurant settings:
@@ -408,7 +506,31 @@ SET settings = settings || jsonb_build_object(
 WHERE id = 'your_restaurant_id';
 ```
 
-### Update Menu
+### Configure Restaurant Menu
+
+The system supports **two methods** for managing your restaurant menu:
+
+#### Option 1: Dynamic Toast API Menu (Recommended for Toast users)
+
+If you have a Toast Standard API key, the system will automatically fetch your menu from Toast POS. This ensures the AI always has your latest menu with current prices, items, and descriptions.
+
+**Setup:** Just configure your Toast API credentials (see Business Hours section above). The menu will be fetched automatically.
+
+**How it works:**
+- Every call fetches menu from Toast's `/config/v2/menus` endpoint
+- Returns complete menu structure with categories (menu groups), items, modifiers, and prices
+- Caches result for 1 hour (menus change less frequently than availability)
+- Falls back to database menu if Toast API is unavailable
+
+**Benefits:**
+- Always up-to-date menu - no manual updates needed
+- Price changes in Toast POS are immediately reflected
+- New items appear automatically
+- Menu items removed from Toast won't be offered
+
+#### Option 2: Database Menu (Fallback)
+
+If you don't have Toast API access or use a different POS, configure your menu in the database:
 
 ```sql
 UPDATE restaurants
@@ -424,11 +546,24 @@ SET menu = '{
           "description": "Crispy vegetable spring rolls"
         }
       ]
+    },
+    {
+      "name": "Entrees",
+      "items": [
+        {
+          "id": "ent1",
+          "name": "Pad Thai",
+          "price": 14.99,
+          "description": "Rice noodles with peanuts and tamarind sauce"
+        }
+      ]
     }
   ]
 }'::jsonb
 WHERE id = 'your_restaurant_id';
 ```
+
+**Priority:** Toast API (if configured) → Database menu (fallback)
 
 ## Testing
 
@@ -519,11 +654,10 @@ Railway is the fastest way to deploy:
 Required environment variables:
 - `NODE_ENV=production`
 - `DATABASE_URL` - From your cloud provider
-- `REDIS_URL` - From your cloud provider
-- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`
-- `OPENAI_API_KEY`
+- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` - For Bland.ai BYOT
+- `BLAND_API_KEY` - From bland.ai dashboard
 - `WEBHOOK_BASE_URL` - Your deployed app URL
-- For Toast: `itsacheckmate_api_key`, `itsacheckmate_restaurant_guid` (in database)
+- For Toast: `ITSACHECKMATE_API_KEY`, `ITSACHECKMATE_RESTAURANT_GUID` (or in database)
 - For Stripe users: `STRIPE_SECRET_KEY`
 
 ### Post-Deployment Checklist
@@ -538,10 +672,12 @@ Required environment variables:
 
 ## Troubleshooting
 
-### WebSocket Connection Issues
+### Bland.ai Configuration Issues
 
-- Ensure `WEBHOOK_BASE_URL` uses `wss://` for secure WebSocket
-- Check ngrok or hosting firewall allows WebSocket connections
+- Ensure your Twilio number is properly imported in Bland.ai dashboard
+- Verify webhook URL is correct and publicly accessible
+- Check Bland.ai logs for call processing errors
+- Make sure task instructions are configured in Bland.ai agent
 
 ### Database Connection Errors
 
@@ -551,11 +687,12 @@ Required environment variables:
 - For Railway/Render: Check service logs for connection errors
 - Verify SSL settings match your provider's requirements
 
-### Twilio Webhook Errors
+### Webhook Errors
 
-- Check Twilio debugger console for webhook failures
-- Verify webhook URLs are publicly accessible
-- Ensure endpoints return valid TwiML
+- Check Railway/hosting logs for webhook errors
+- Verify `/voice/bland-webhook` endpoint is accessible
+- Ensure your server can parse Bland.ai webhook payloads
+- Check Bland.ai dashboard for webhook delivery failures
 
 ### POS Sync Failures
 
@@ -584,7 +721,7 @@ For issues and questions, please open an issue on GitHub.
 ## Credits
 
 Built with:
-- [Twilio](https://www.twilio.com/) - Voice infrastructure
-- [OpenAI](https://openai.com/) - AI conversation engine
-- [Stripe](https://stripe.com/) - Payment processing
-- [Itsacheckmate](https://www.itsacheckmate.com/) - Toast POS integration
+- [Twilio](https://www.twilio.com/) - Phone number infrastructure
+- [Bland.ai](https://bland.ai/) - AI voice conversation engine
+- [Stripe](https://stripe.com/) - Payment processing (optional)
+- [Itsacheckmate](https://www.itsacheckmate.com/) - Toast POS integration and payment processing

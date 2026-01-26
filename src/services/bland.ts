@@ -1,5 +1,7 @@
 import axios from 'axios';
 import { Database } from '../database/client';
+import { OrderService } from './orders';
+import { ToastService } from './toast';
 
 const BLAND_API_KEY = process.env.BLAND_API_KEY!;
 const BLAND_API_URL = 'https://api.bland.ai/v1';
@@ -21,6 +23,10 @@ interface Restaurant {
   address: string;
   menu: any;
   settings: any;
+  business_hours?: any;
+  timezone?: string;
+  pos_system?: string;
+  pos_credentials?: any;
 }
 
 class BlandServiceClass {
@@ -35,35 +41,49 @@ class BlandServiceClass {
   /**
    * Generate AI task instructions for a restaurant
    */
-  private generateTaskInstructions(restaurant: Restaurant): string {
-    const menu = typeof restaurant.menu === 'string'
-      ? JSON.parse(restaurant.menu)
-      : restaurant.menu;
-
+  private async generateTaskInstructions(restaurant: Restaurant): Promise<string> {
     const settings = typeof restaurant.settings === 'string'
       ? JSON.parse(restaurant.settings)
       : restaurant.settings;
 
+    const businessHours = typeof restaurant.business_hours === 'string'
+      ? JSON.parse(restaurant.business_hours)
+      : restaurant.business_hours;
+
+    // Fetch menu dynamically from Toast API if available, fall back to database
+    const menu = await this.getRestaurantMenuDynamic(restaurant);
+
     const menuText = this.formatMenuForAI(menu);
+    const hoursText = this.formatBusinessHoursForAI(businessHours, restaurant.timezone || 'America/New_York');
+    const isOpen = await this.isRestaurantOpenDynamic(restaurant, businessHours);
 
     return `You are an AI phone assistant for ${restaurant.name}, a quick-service restaurant.
 
 IMPORTANT: We are a quick-service restaurant - we do NOT take reservations or have table service. We only handle takeout and delivery orders.
-
-Your role:
-1. Take food orders for pickup or delivery
-2. Answer questions about menu items, hours, and location
-3. Process payments over the phone
-4. Provide excellent customer service
 
 Restaurant Information:
 - Name: ${restaurant.name}
 - Address: ${restaurant.address}
 - Phone: ${restaurant.phone_number}
 
+${hoursText}
+
+CURRENT STATUS: ${isOpen ? '🟢 WE ARE OPEN' : '🔴 WE ARE CLOSED'}
+
+${isOpen ? `Your role:
+1. Take food orders for pickup or delivery
+2. Answer questions about menu items, hours, and location
+3. Process payments over the phone
+4. Provide excellent customer service` : `IMPORTANT - WE ARE CURRENTLY CLOSED:
+- DO NOT take orders or process payments
+- Politely inform the caller we are closed
+- Provide our business hours and let them know when we reopen
+- Offer to answer questions about menu or location
+- Thank them for calling and invite them to call back during business hours`}
+
 ${menuText}
 
-Order Process:
+${isOpen ? `Order Process (ONLY when open):
 1. Greet the customer warmly: "${settings.greeting || `Thank you for calling ${restaurant.name}! How can I help you today?`}"
 2. Take their order, confirming each item and quantity
 3. Ask if it's for pickup or delivery
@@ -72,12 +92,13 @@ Order Process:
 6. Provide total price
 7. Ask for payment information
 8. Confirm estimated ready time (${settings.orderLeadTime || 30} minutes)
-9. Thank them and end the call
+9. Thank them and end the call` : `When Closed - Greeting:
+"Thank you for calling ${restaurant.name}. I apologize, but we're currently closed. We're open ${this.getNextOpenTime(businessHours, restaurant.timezone || 'America/New_York')}. How can I help you?"`}
 
 Important Guidelines:
 - Be friendly, professional, and concise
 - Speak naturally like a real person
-- Confirm order details to ensure accuracy
+${isOpen ? '- Confirm order details to ensure accuracy' : '- DO NOT take orders when closed - be apologetic but firm'}
 - If asked about reservations or dine-in, politely explain we're a quick-service restaurant and only offer pickup/delivery
 - For questions about allergens, provide information from the menu
 - If you don't know something, offer to transfer them or have someone call back
@@ -88,7 +109,36 @@ Payment:
 - For security, don't repeat card numbers back
 - Confirm the payment went through
 
-Remember: You're representing ${restaurant.name}. Be helpful and make ordering easy!`;
+Remember: You're representing ${restaurant.name}. Be helpful and make ordering easy!
+
+CRITICAL - Order Data Format:
+When an order is placed, you MUST include this exact structured data at the end of the call in this format:
+
+ORDER_DATA_START
+{
+  "order_placed": true,
+  "order_type": "pickup" or "delivery",
+  "items": [
+    {
+      "itemName": "exact menu item name",
+      "quantity": number,
+      "price": number,
+      "modifiers": ["modifier1", "modifier2"],
+      "specialInstructions": "any special requests"
+    }
+  ],
+  "customer": {
+    "phone": "customer phone number",
+    "name": "customer name if provided"
+  },
+  "delivery_address": "full address if delivery order",
+  "special_instructions": "overall order notes",
+  "payment_method": "card",
+  "card_last4": "last 4 digits of card if provided"
+}
+ORDER_DATA_END
+
+This structured data is required for order processing. Include it even if the customer doesn't complete payment.`;
   }
 
   private formatMenuForAI(menu: any): string {
@@ -109,6 +159,241 @@ Remember: You're representing ${restaurant.name}. Be helpful and make ordering e
     }
 
     return menuText;
+  }
+
+  /**
+   * Format business hours for AI understanding
+   */
+  private formatBusinessHoursForAI(businessHours: any, timezone: string): string {
+    if (!businessHours) {
+      return 'Business Hours: Not specified';
+    }
+
+    let hoursText = 'BUSINESS HOURS:\n';
+    const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+    for (const day of days) {
+      const dayHours = businessHours[day];
+      if (dayHours && dayHours.open && dayHours.close) {
+        hoursText += `${day.charAt(0).toUpperCase() + day.slice(1)}: ${dayHours.open} - ${dayHours.close}\n`;
+      } else {
+        hoursText += `${day.charAt(0).toUpperCase() + day.slice(1)}: Closed\n`;
+      }
+    }
+
+    hoursText += `\nTimezone: ${timezone}\n`;
+    return hoursText;
+  }
+
+  /**
+   * Get restaurant menu - uses Toast API if available
+   * Falls back to database menu if Toast API unavailable
+   */
+  private async getRestaurantMenuDynamic(restaurant: Restaurant): Promise<any> {
+    // If restaurant uses Toast POS, fetch menu from Toast API
+    if (restaurant.pos_system === 'toast' && restaurant.pos_credentials) {
+      try {
+        const credentials = typeof restaurant.pos_credentials === 'string'
+          ? JSON.parse(restaurant.pos_credentials)
+          : restaurant.pos_credentials;
+
+        // Check if we have Toast API credentials
+        if (credentials.toast_api_key && credentials.toast_restaurant_guid) {
+          console.log(`Fetching menu from Toast API for restaurant ${restaurant.id}`);
+          const toastMenu = await ToastService.getRestaurantMenu(
+            credentials.toast_restaurant_guid,
+            credentials.toast_api_key
+          );
+
+          // Transform Toast menu format to internal format
+          return this.transformToastMenuToInternalFormat(toastMenu);
+        } else {
+          console.log(`Restaurant ${restaurant.id} doesn't have Toast API credentials - using database menu`);
+        }
+      } catch (error) {
+        console.error(`Error fetching menu from Toast API for restaurant ${restaurant.id}:`, error);
+        console.log('Falling back to database menu');
+      }
+    }
+
+    // Fall back to database menu
+    const menu = typeof restaurant.menu === 'string'
+      ? JSON.parse(restaurant.menu)
+      : restaurant.menu;
+
+    return menu;
+  }
+
+  /**
+   * Transform Toast API menu format to internal format expected by AI
+   */
+  private transformToastMenuToInternalFormat(toastMenu: any): any {
+    if (!toastMenu || !toastMenu.menus || toastMenu.menus.length === 0) {
+      return { categories: [] };
+    }
+
+    const categories: any[] = [];
+
+    // Iterate through all menus (restaurants often have just one active menu)
+    for (const menu of toastMenu.menus) {
+      if (!menu.menuGroups) continue;
+
+      // Each menuGroup becomes a category
+      for (const group of menu.menuGroups) {
+        if (!group.items || group.items.length === 0) continue;
+
+        const category = {
+          name: group.name,
+          items: group.items.map((item: any) => ({
+            id: item.guid,
+            name: item.name,
+            price: item.price || 0,
+            description: item.description || '',
+          }))
+        };
+
+        categories.push(category);
+      }
+    }
+
+    return { categories };
+  }
+
+  /**
+   * Check if restaurant is currently open - uses Toast API if available
+   * Falls back to database business hours if Toast API unavailable
+   */
+  private async isRestaurantOpenDynamic(restaurant: Restaurant, businessHours: any): Promise<boolean> {
+    // If restaurant uses Toast POS, check real-time availability from Toast API
+    if (restaurant.pos_system === 'toast' && restaurant.pos_credentials) {
+      try {
+        const credentials = typeof restaurant.pos_credentials === 'string'
+          ? JSON.parse(restaurant.pos_credentials)
+          : restaurant.pos_credentials;
+
+        // Check if we have Toast API credentials
+        if (credentials.toast_api_key && credentials.toast_restaurant_guid) {
+          console.log(`Checking Toast API for restaurant ${restaurant.id} availability`);
+          const isOpen = await ToastService.isRestaurantOpen(
+            credentials.toast_restaurant_guid,
+            credentials.toast_api_key
+          );
+          return isOpen;
+        } else if (credentials.itsacheckmate_restaurant_guid) {
+          // We have Itsacheckmate but not direct Toast API access
+          // Fall back to database hours
+          console.log(`Restaurant ${restaurant.id} uses Itsacheckmate - falling back to database hours`);
+        }
+      } catch (error) {
+        console.error(`Error checking Toast availability for restaurant ${restaurant.id}:`, error);
+        console.log('Falling back to database business hours');
+      }
+    }
+
+    // Fall back to database business hours
+    return this.isRestaurantOpen(businessHours, restaurant.timezone || 'America/New_York');
+  }
+
+  /**
+   * Check if restaurant is currently open based on business hours
+   */
+  private isRestaurantOpen(businessHours: any, timezone: string): boolean {
+    if (!businessHours) {
+      return true; // If no hours specified, assume always open
+    }
+
+    try {
+      // Get current time in restaurant's timezone
+      const now = new Date();
+      const options: Intl.DateTimeFormatOptions = {
+        timeZone: timezone,
+        weekday: 'long',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      };
+
+      const formatter = new Intl.DateTimeFormat('en-US', options);
+      const parts = formatter.formatToParts(now);
+
+      const weekday = parts.find(p => p.type === 'weekday')?.value.toLowerCase();
+      const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0');
+      const minute = parseInt(parts.find(p => p.type === 'minute')?.value || '0');
+      const currentMinutes = hour * 60 + minute;
+
+      if (!weekday || !businessHours[weekday]) {
+        return true; // If we can't determine, assume open
+      }
+
+      const dayHours = businessHours[weekday];
+      if (!dayHours.open || !dayHours.close) {
+        return false; // Closed on this day
+      }
+
+      // Parse open and close times
+      const parseTime = (timeStr: string): number => {
+        const [h, m] = timeStr.split(':').map(Number);
+        return h * 60 + m;
+      };
+
+      const openMinutes = parseTime(dayHours.open);
+      const closeMinutes = parseTime(dayHours.close);
+
+      // Check if current time is within business hours
+      return currentMinutes >= openMinutes && currentMinutes <= closeMinutes;
+    } catch (error) {
+      console.error('Error checking if restaurant is open:', error);
+      return true; // If error, assume open to avoid blocking service
+    }
+  }
+
+  /**
+   * Get human-readable text for when restaurant opens next
+   */
+  private getNextOpenTime(businessHours: any, timezone: string): string {
+    if (!businessHours) {
+      return 'during our regular business hours';
+    }
+
+    try {
+      const now = new Date();
+      const options: Intl.DateTimeFormatOptions = {
+        timeZone: timezone,
+        weekday: 'long',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      };
+
+      const formatter = new Intl.DateTimeFormat('en-US', options);
+      const parts = formatter.formatToParts(now);
+      const currentWeekday = parts.find(p => p.type === 'weekday')?.value.toLowerCase() || '';
+
+      const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+      const currentDayIndex = days.indexOf(currentWeekday);
+
+      // Check next 7 days for next opening
+      for (let i = 0; i < 7; i++) {
+        const dayIndex = (currentDayIndex + i) % 7;
+        const day = days[dayIndex];
+        const dayHours = businessHours[day];
+
+        if (dayHours && dayHours.open) {
+          if (i === 0) {
+            return `today at ${dayHours.open}`;
+          } else if (i === 1) {
+            return `tomorrow at ${dayHours.open}`;
+          } else {
+            return `on ${day.charAt(0).toUpperCase() + day.slice(1)} at ${dayHours.open}`;
+          }
+        }
+      }
+
+      return 'during our regular business hours';
+    } catch (error) {
+      console.error('Error getting next open time:', error);
+      return 'during our regular business hours';
+    }
   }
 
   /**
@@ -139,7 +424,7 @@ Remember: You're representing ${restaurant.name}. Be helpful and make ordering e
     }
 
     const restaurant = result.rows[0];
-    return this.generateTaskInstructions(restaurant);
+    return await this.generateTaskInstructions(restaurant);
   }
 
   /**
@@ -186,6 +471,9 @@ Remember: You're representing ${restaurant.name}. Be helpful and make ordering e
       // Parse transcript for analytics if available
       if (callTranscript) {
         await this.analyzeCallTranscript(callId, callTranscript);
+
+        // Process order if one was placed during the call
+        await this.processOrderFromTranscript(callId, toNumber, fromNumber, callTranscript);
       }
 
       return { success: true, call_id: callId };
@@ -221,6 +509,110 @@ Remember: You're representing ${restaurant.name}. Be helpful and make ordering e
       console.log(`Call ${callId} intent detected: ${intent}`);
     } catch (error) {
       console.error('Error analyzing transcript:', error);
+    }
+  }
+
+  /**
+   * Process order from call transcript
+   */
+  private async processOrderFromTranscript(
+    callId: string,
+    restaurantPhoneNumber: string,
+    customerPhoneNumber: string,
+    transcript: string
+  ) {
+    try {
+      // Extract structured order data from transcript
+      const orderDataMatch = transcript.match(/ORDER_DATA_START\s*(\{[\s\S]*?\})\s*ORDER_DATA_END/);
+
+      if (!orderDataMatch) {
+        console.log(`No order data found in transcript for call ${callId}`);
+        return;
+      }
+
+      const orderData = JSON.parse(orderDataMatch[1]);
+
+      if (!orderData.order_placed) {
+        console.log(`Order not completed in call ${callId}`);
+        return;
+      }
+
+      console.log('Order detected in call:', callId, orderData);
+
+      // Get restaurant from database
+      const restaurantResult = await Database.query(
+        'SELECT id, pos_system, business_hours, timezone FROM restaurants WHERE phone_number = $1',
+        [restaurantPhoneNumber]
+      );
+
+      if (restaurantResult.rows.length === 0) {
+        console.error(`Restaurant not found for phone number ${restaurantPhoneNumber}`);
+        return;
+      }
+
+      const restaurant = restaurantResult.rows[0];
+
+      // Safety check: Don't process orders if restaurant is closed
+      const businessHours = typeof restaurant.business_hours === 'string'
+        ? JSON.parse(restaurant.business_hours)
+        : restaurant.business_hours;
+
+      const isOpen = await this.isRestaurantOpenDynamic(restaurant, businessHours);
+      if (!isOpen) {
+        console.warn(`Order attempted while restaurant ${restaurant.id} is closed. Skipping order creation.`);
+        return;
+      }
+
+      // Find or create customer
+      let customer;
+      const customerResult = await Database.query(
+        'SELECT id FROM customers WHERE phone_number = $1',
+        [customerPhoneNumber]
+      );
+
+      if (customerResult.rows.length > 0) {
+        customer = customerResult.rows[0];
+      } else {
+        // Create new customer
+        const newCustomerResult = await Database.query(
+          `INSERT INTO customers (phone_number, name, restaurant_id)
+           VALUES ($1, $2, $3)
+           RETURNING id`,
+          [customerPhoneNumber, orderData.customer.name || 'Phone Order Customer', restaurant.id]
+        );
+        customer = newCustomerResult.rows[0];
+      }
+
+      // Create order in database
+      const order = await OrderService.createOrder({
+        restaurantId: restaurant.id,
+        customerId: customer.id,
+        callId: callId,
+        items: orderData.items,
+        orderType: orderData.order_type,
+        deliveryAddress: orderData.delivery_address,
+        specialInstructions: orderData.special_instructions,
+      });
+
+      console.log('Order created in database:', order.id);
+
+      // Sync to POS if configured
+      if (restaurant.pos_system) {
+        try {
+          const posSync = await OrderService.syncToPOS(order.id);
+          console.log(`Order ${order.id} synced to ${restaurant.pos_system}:`, posSync);
+        } catch (error) {
+          console.error(`Failed to sync order ${order.id} to POS:`, error);
+          // Order is still created in database, POS sync can be retried
+        }
+      } else {
+        console.warn(`No POS system configured for restaurant ${restaurant.id}`);
+      }
+
+      return order;
+    } catch (error) {
+      console.error('Error processing order from transcript:', error);
+      // Don't throw - we don't want to fail the webhook if order processing fails
     }
   }
 

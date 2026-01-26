@@ -8,8 +8,8 @@ async function seed() {
 
     // Sample restaurant
     const restaurantResult = await Database.query(
-      `INSERT INTO restaurants (name, phone_number, email, address, menu, settings)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO restaurants (name, phone_number, email, address, timezone, business_hours, menu, settings, pos_system, pos_credentials)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        ON CONFLICT (phone_number) DO NOTHING
        RETURNING id`,
       [
@@ -17,6 +17,16 @@ async function seed() {
         '+15555551234',
         'demo@restaurant.com',
         '123 Main St, New York, NY 10001',
+        'America/New_York',
+        JSON.stringify({
+          monday: { open: '09:00', close: '22:00' },
+          tuesday: { open: '09:00', close: '22:00' },
+          wednesday: { open: '09:00', close: '22:00' },
+          thursday: { open: '09:00', close: '22:00' },
+          friday: { open: '09:00', close: '23:00' },
+          saturday: { open: '10:00', close: '23:00' },
+          sunday: { open: '10:00', close: '21:00' }
+        }),
         JSON.stringify({
           categories: [
             {
@@ -49,6 +59,14 @@ async function seed() {
           acceptOrders: true,
           acceptReservations: false, // Quick-service restaurant - no reservations
           orderLeadTime: 30 // minutes for pickup/delivery
+        }),
+        'toast', // POS system
+        JSON.stringify({
+          itsacheckmate_api_key: process.env.ITSACHECKMATE_API_KEY || 'your_itsacheckmate_api_key',
+          itsacheckmate_restaurant_guid: process.env.ITSACHECKMATE_RESTAURANT_GUID || 'your_restaurant_guid',
+          // Optional: Toast API credentials for real-time availability checking
+          toast_api_key: process.env.TOAST_API_KEY || '',
+          toast_restaurant_guid: process.env.TOAST_RESTAURANT_GUID || ''
         })
       ]
     );
