@@ -147,9 +147,28 @@ Remember: You're representing ${restaurant.name}. Be helpful and make ordering e
    */
   async handleCallWebhook(webhookData: any) {
     try {
-      const { call_id, to, from, status, transcript, duration, answered_by } = webhookData;
+      // Bland.ai can send different field names depending on the event
+      const callId = webhookData.call_id || webhookData.c_id;
+      const toNumber = webhookData.to || webhookData.to_number;
+      const fromNumber = webhookData.from || webhookData.from_number;
+      const callStatus = webhookData.status || webhookData.call_status || 'completed';
+      const callDuration = webhookData.call_length || webhookData.duration || 0;
+      const callTranscript = webhookData.concatenated_transcript || webhookData.transcript || '';
 
-      console.log(`Bland.ai call completed: ${call_id}`);
+      console.log(`Bland.ai webhook received:`, {
+        callId,
+        toNumber,
+        fromNumber,
+        callStatus,
+        callDuration,
+        hasTranscript: !!callTranscript
+      });
+
+      // If no call_id, this might be a test webhook or different event type
+      if (!callId) {
+        console.warn('No call_id in webhook, skipping database insert:', webhookData);
+        return { success: true, message: 'Webhook received but no call_id present' };
+      }
 
       // Save or update call in database
       await Database.query(
@@ -157,17 +176,19 @@ Remember: You're representing ${restaurant.name}. Be helpful and make ordering e
          VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
          ON CONFLICT (call_sid)
          DO UPDATE SET
-           status = $3,
+           status = $4,
            duration = $5,
            transcript = $6,
            ended_at = NOW()`,
-        [call_id, from, to, status, duration, transcript]
+        [callId, fromNumber, toNumber, callStatus, callDuration, callTranscript]
       );
 
-      // Parse transcript for analytics
-      await this.analyzeCallTranscript(call_id, transcript);
+      // Parse transcript for analytics if available
+      if (callTranscript) {
+        await this.analyzeCallTranscript(callId, callTranscript);
+      }
 
-      return { success: true, call_id };
+      return { success: true, call_id: callId };
     } catch (error) {
       console.error('Error handling Bland.ai webhook:', error);
       throw error;
