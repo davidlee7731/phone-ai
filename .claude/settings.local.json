@@ -9,7 +9,9 @@
       "WebFetch(domain:docs.bland.ai)",
       "WebFetch(domain:doc.toasttab.com)",
       "WebFetch(domain:toastintegrations.redoc.ly)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(psql $DATABASE_URL -c \"SELECT phone_number, pos_system, pos_credentials FROM restaurants WHERE phone_number = ''+14695178245'';\")",
+      "Bash(node scripts/check-restaurant.js:*)"
     ]
   }
 }
