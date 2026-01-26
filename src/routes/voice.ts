@@ -20,7 +20,7 @@ voiceRouter.post('/incoming', async (req, res) => {
     });
 
     // Return TwiML to connect to WebSocket stream
-    const response = TwilioService.createStreamResponse(CallSid);
+    const response = TwilioService.createStreamResponse(CallSid, To, From);
 
     res.type('text/xml');
     res.send(response.toString());

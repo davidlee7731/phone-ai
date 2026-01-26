@@ -18,13 +18,17 @@ interface StreamSession {
 class TwilioServiceClass {
   private activeSessions = new Map<string, StreamSession>();
 
-  createStreamResponse(callSid: string): VoiceResponse {
+  createStreamResponse(callSid: string, to: string, from: string): VoiceResponse {
     const twiml = new VoiceResponse();
 
     // Start media stream
     const connect = twiml.connect();
     connect.stream({
       url: `wss://${process.env.WEBHOOK_BASE_URL}/voice/stream`,
+      parameter: [
+        { name: 'To', value: to },
+        { name: 'From', value: from },
+      ],
     });
 
     return twiml;
@@ -33,13 +37,24 @@ class TwilioServiceClass {
   async handleStreamStart(ws: WebSocket, callSid: string, streamSid: string, startData: any) {
     try {
       // Get restaurant info from database based on called number
+      const toNumber = startData.customParameters?.To;
+      const fromNumber = startData.customParameters?.From;
+
+      console.log(`Stream start - To: ${toNumber}, From: ${fromNumber}`);
+
+      if (!toNumber) {
+        console.error('To number not found in stream start data');
+        this.sendErrorResponse(ws);
+        return;
+      }
+
       const restaurantResult = await Database.query(
         'SELECT * FROM restaurants WHERE phone_number = $1',
-        [startData.customParameters?.To || startData.to]
+        [toNumber]
       );
 
       if (restaurantResult.rows.length === 0) {
-        console.error('Restaurant not found for number:', startData.to);
+        console.error('Restaurant not found for number:', toNumber);
         this.sendErrorResponse(ws);
         return;
       }
@@ -50,7 +65,7 @@ class TwilioServiceClass {
       const aiService = new AIService({
         callSid,
         restaurant,
-        customerPhone: startData.from,
+        customerPhone: fromNumber,
       });
 
       await aiService.initialize();
