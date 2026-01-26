@@ -1,7 +1,7 @@
 import twilio from 'twilio';
 import VoiceResponse = require('twilio/lib/twiml/VoiceResponse');
 import WebSocket from 'ws';
-import { AIService } from './ai';
+import { OpenAIRealtimeService } from './openai-realtime';
 import { Database } from '../database/client';
 
 const accountSid = process.env.TWILIO_ACCOUNT_SID!;
@@ -12,7 +12,7 @@ interface StreamSession {
   ws: WebSocket;
   callSid: string;
   streamSid: string;
-  aiService: AIService;
+  aiService: OpenAIRealtimeService;
 }
 
 class TwilioServiceClass {
@@ -61,8 +61,8 @@ class TwilioServiceClass {
 
       const restaurant = restaurantResult.rows[0];
 
-      // Initialize AI service for this call
-      const aiService = new AIService({
+      // Initialize OpenAI Realtime service for this call
+      const aiService = new OpenAIRealtimeService({
         callSid,
         restaurant,
         customerPhone: fromNumber,
