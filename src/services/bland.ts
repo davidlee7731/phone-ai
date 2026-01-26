@@ -50,10 +50,6 @@ class BlandServiceClass {
       ? JSON.parse(restaurant.business_hours)
       : restaurant.business_hours;
 
-    // Fetch menu dynamically from Toast API if available, fall back to database
-    const menu = await this.getRestaurantMenuDynamic(restaurant);
-
-    const menuText = this.formatMenuForAI(menu);
     const hoursText = this.formatBusinessHoursForAI(businessHours, restaurant.timezone || 'America/New_York');
     const isOpen = await this.isRestaurantOpenDynamic(restaurant, businessHours);
 
@@ -81,7 +77,12 @@ ${isOpen ? `Your role:
 - Offer to answer questions about menu or location
 - Thank them for calling and invite them to call back during business hours`}
 
-${menuText}
+MENU INFORMATION:
+The complete menu with all items, prices, and descriptions is available in your knowledge base. Use it to:
+- Answer questions about menu items and prices
+- Suggest items based on customer preferences
+- Provide accurate pricing for orders
+- Describe ingredients and allergen information
 
 ${isOpen ? `Order Process (ONLY when open):
 1. Greet the customer warmly: "${settings.greeting || `Thank you for calling ${restaurant.name}! How can I help you today?`}"
@@ -139,26 +140,6 @@ ORDER_DATA_START
 ORDER_DATA_END
 
 This structured data is required for order processing. Include it even if the customer doesn't complete payment.`;
-  }
-
-  private formatMenuForAI(menu: any): string {
-    if (!menu || !menu.categories) return '';
-
-    let menuText = 'MENU:\n\n';
-
-    for (const category of menu.categories) {
-      menuText += `${category.name}:\n`;
-      for (const item of category.items) {
-        menuText += `- ${item.name} - $${item.price.toFixed(2)}`;
-        if (item.description) {
-          menuText += ` (${item.description})`;
-        }
-        menuText += '\n';
-      }
-      menuText += '\n';
-    }
-
-    return menuText;
   }
 
   /**
@@ -425,6 +406,69 @@ This structured data is required for order processing. Include it even if the cu
 
     const restaurant = result.rows[0];
     return await this.generateTaskInstructions(restaurant);
+  }
+
+  /**
+   * Get restaurant menu for knowledge base
+   * Returns formatted menu text suitable for Bland.ai knowledge base
+   */
+  async getRestaurantMenu(phoneNumber: string): Promise<string> {
+    // Get restaurant from database
+    const result = await Database.query(
+      'SELECT * FROM restaurants WHERE phone_number = $1',
+      [phoneNumber]
+    );
+
+    if (result.rows.length === 0) {
+      throw new Error(`No restaurant found for number ${phoneNumber}`);
+    }
+
+    const restaurant = result.rows[0];
+
+    // Fetch menu dynamically from Toast API if available
+    const menu = await this.getRestaurantMenuDynamic(restaurant);
+
+    // Format menu for knowledge base
+    return this.formatMenuForKnowledgeBase(menu, restaurant.name);
+  }
+
+  /**
+   * Format menu for Bland.ai knowledge base (more detailed than AI prompt format)
+   */
+  private formatMenuForKnowledgeBase(menu: any, restaurantName: string): string {
+    if (!menu || !menu.categories) {
+      return `${restaurantName} Menu\n\nNo menu items available at this time.`;
+    }
+
+    let menuText = `${restaurantName} - Complete Menu\n\n`;
+    menuText += `This is the current menu with all available items, prices, and descriptions.\n\n`;
+    menuText += `==========================================\n\n`;
+
+    for (const category of menu.categories) {
+      menuText += `## ${category.name}\n\n`;
+
+      for (const item of category.items) {
+        menuText += `### ${item.name}\n`;
+        menuText += `Price: $${typeof item.price === 'number' ? item.price.toFixed(2) : item.price}\n`;
+
+        if (item.description) {
+          menuText += `Description: ${item.description}\n`;
+        }
+
+        if (item.id) {
+          menuText += `Item ID: ${item.id}\n`;
+        }
+
+        menuText += `\n`;
+      }
+
+      menuText += `\n`;
+    }
+
+    menuText += `==========================================\n\n`;
+    menuText += `Note: All prices are in USD. Menu is updated automatically from our POS system.\n`;
+
+    return menuText;
   }
 
   /**

@@ -185,11 +185,18 @@ npm run db:seed
    - Go to [bland.ai](https://bland.ai) dashboard
    - Import your Twilio phone number using "Bring Your Own Twilio" (BYOT)
    - Configure webhook URL: `https://your-domain.ngrok.io/voice/bland-webhook`
-   - The system will automatically generate task instructions from your restaurant database
+   - Set up the global prompt (conversation behavior)
+   - Set up the knowledge base with your menu (dynamic updates from Toast API)
+   - **See [BLAND_AI_SETUP.md](BLAND_AI_SETUP.md) for detailed configuration instructions**
 
 3. Update `WEBHOOK_BASE_URL` in `.env` with your ngrok URL.
 
 Your Twilio number will now route calls through Bland.ai for voice processing, then send webhooks to your server for order processing and POS integration.
+
+**Architecture:**
+- **Prompt**: Contains conversation behavior, business hours, order process (fetched from `/voice/task/:phoneNumber`)
+- **Knowledge Base**: Contains menu data from Toast API (fetched from `/voice/menu/:phoneNumber`)
+- **Webhook**: Receives call transcripts and processes orders (posts to `/voice/bland-webhook`)
 
 ## Running the Application
 
