@@ -148,13 +148,13 @@ class ToastServiceClass {
 
     try {
       // Fetch from Toast API
+      // Note: restaurantGuid is passed as query parameter for Config API v2
       const response = await fetch(
-        `${this.TOAST_API_BASE}/config/v2/menus`,
+        `${this.TOAST_API_BASE}/config/v2/menus?restaurantGuid=${restaurantGuid}`,
         {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${apiKey}`,
-            'Toast-Restaurant-External-ID': restaurantGuid,
             'Content-Type': 'application/json',
           },
         }
