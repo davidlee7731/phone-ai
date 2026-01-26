@@ -47,9 +47,8 @@ async function seed() {
           greeting: 'Thank you for calling Demo Restaurant! How can I help you today?',
           language: 'en-US',
           acceptOrders: true,
-          acceptReservations: true,
-          maxPartySize: 12,
-          orderLeadTime: 30 // minutes
+          acceptReservations: false, // Quick-service restaurant - no reservations
+          orderLeadTime: 30 // minutes for pickup/delivery
         })
       ]
     );

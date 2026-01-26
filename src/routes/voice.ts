@@ -1,41 +1,37 @@
 import express from 'express';
-import { TwilioService } from '../services/twilio';
+import { BlandService } from '../services/bland';
 import { CallService } from '../services/calls';
-import VoiceResponse = require('twilio/lib/twiml/VoiceResponse');
 
 export const voiceRouter = express.Router();
 
-// Handle incoming calls
-voiceRouter.post('/incoming', async (req, res) => {
+// Webhook endpoint for Bland.ai to send call events
+voiceRouter.post('/bland-webhook', async (req, res) => {
   try {
-    const { CallSid, From, To } = req.body;
+    console.log('Received Bland.ai webhook:', JSON.stringify(req.body, null, 2));
 
-    console.log(`Incoming call: ${CallSid} from ${From} to ${To}`);
+    const result = await BlandService.handleCallWebhook(req.body);
 
-    // Create call record
-    await CallService.createCall({
-      callSid: CallSid,
-      fromNumber: From,
-      toNumber: To,
-    });
-
-    // Return TwiML to connect to WebSocket stream
-    const response = TwilioService.createStreamResponse(CallSid, To, From);
-
-    res.type('text/xml');
-    res.send(response.toString());
+    res.json(result);
   } catch (error) {
-    console.error('Error handling incoming call:', error);
-
-    const twiml = new VoiceResponse();
-    twiml.say('We apologize, but we are experiencing technical difficulties. Please try again later.');
-
-    res.type('text/xml');
-    res.send(twiml.toString());
+    console.error('Error handling Bland.ai webhook:', error);
+    res.status(500).json({ error: 'Failed to process webhook' });
   }
 });
 
-// Handle call status updates
+// Endpoint to get task instructions for a phone number (for testing)
+voiceRouter.get('/task/:phoneNumber', async (req, res) => {
+  try {
+    const { phoneNumber } = req.params;
+    const task = await BlandService.getRestaurantTask(phoneNumber);
+
+    res.json({ task });
+  } catch (error) {
+    console.error('Error getting task:', error);
+    res.status(500).json({ error: 'Failed to get task' });
+  }
+});
+
+// Handle call status updates (kept for compatibility if needed)
 voiceRouter.post('/status', async (req, res) => {
   try {
     const { CallSid, CallStatus, CallDuration } = req.body;
@@ -53,23 +49,3 @@ voiceRouter.post('/status', async (req, res) => {
     res.sendStatus(500);
   }
 });
-
-// Handle recording callback
-voiceRouter.post('/recording', async (req, res) => {
-  try {
-    const { CallSid, RecordingUrl } = req.body;
-
-    console.log(`Recording available for call ${CallSid}: ${RecordingUrl}`);
-
-    await CallService.updateCall(CallSid, {
-      recordingUrl: RecordingUrl,
-    });
-
-    res.sendStatus(200);
-  } catch (error) {
-    console.error('Error handling recording callback:', error);
-    res.sendStatus(500);
-  }
-});
-
-// WebSocket handler is now in index.ts to access express-ws instance
