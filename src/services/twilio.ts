@@ -68,14 +68,19 @@ class TwilioServiceClass {
         customerPhone: fromNumber,
       });
 
-      await aiService.initialize();
-
-      // Store session
+      // Store session BEFORE initialization to handle incoming media packets
       this.activeSessions.set(streamSid, {
         ws,
         callSid,
         streamSid,
         aiService,
+      });
+
+      // Initialize AI service asynchronously (greeting, customer lookup)
+      aiService.initialize().catch((error) => {
+        console.error('Error during AI initialization:', error);
+        this.sendErrorResponse(ws);
+        this.activeSessions.delete(streamSid);
       });
 
       // Set up AI response handler to send audio back to Twilio

@@ -24,6 +24,8 @@ export class AIService extends EventEmitter {
   private orderContext: any = {};
   private reservationContext: any = {};
   private customerId: string | null = null;
+  private isReady: boolean = false;
+  private audioBuffer: Buffer[] = [];
 
   constructor(config: AIServiceConfig) {
     super();
@@ -33,26 +35,46 @@ export class AIService extends EventEmitter {
   }
 
   async initialize() {
-    // Get or create customer
-    const customerResult = await Database.query(
-      `INSERT INTO customers (restaurant_id, phone_number)
-       VALUES ($1, $2)
-       ON CONFLICT (restaurant_id, phone_number)
-       DO UPDATE SET updated_at = NOW()
-       RETURNING *`,
-      [this.restaurant.id, this.customerPhone]
-    );
+    try {
+      // Get or create customer
+      const customerResult = await Database.query(
+        `INSERT INTO customers (restaurant_id, phone_number)
+         VALUES ($1, $2)
+         ON CONFLICT (restaurant_id, phone_number)
+         DO UPDATE SET updated_at = NOW()
+         RETURNING *`,
+        [this.restaurant.id, this.customerPhone]
+      );
 
-    this.customerId = customerResult.rows[0].id;
+      this.customerId = customerResult.rows[0].id;
 
-    // Start conversation with greeting
-    const greeting = this.restaurant.settings?.greeting ||
-      `Thank you for calling ${this.restaurant.name}! How can I help you today?`;
+      // Start conversation with greeting
+      const greeting = this.restaurant.settings?.greeting ||
+        `Thank you for calling ${this.restaurant.name}! How can I help you today?`;
 
-    await this.speak(greeting);
+      await this.speak(greeting);
+
+      // Mark as ready and process any buffered audio
+      this.isReady = true;
+
+      // Process any buffered audio packets
+      for (const buffer of this.audioBuffer) {
+        await this.processAudio(buffer);
+      }
+      this.audioBuffer = [];
+    } catch (error) {
+      console.error('Error in AIService initialization:', error);
+      throw error;
+    }
   }
 
   async processAudio(audioBuffer: Buffer) {
+    // Buffer audio packets until initialization completes
+    if (!this.isReady) {
+      this.audioBuffer.push(audioBuffer);
+      return;
+    }
+
     try {
       // Transcribe audio using Whisper
       const transcription = await this.transcribeAudio(audioBuffer);
