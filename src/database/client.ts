@@ -19,17 +19,27 @@ class DatabaseClient {
     await client.query('SELECT NOW()');
     client.release();
 
-    // Redis connection
-    this.redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-      maxRetriesPerRequest: 3,
-      enableReadyCheck: true,
-    });
+    console.log('PostgreSQL connected');
 
-    this.redis.on('error', (err) => {
-      console.error('Redis error:', err);
-    });
+    // Redis connection (optional)
+    if (process.env.REDIS_URL) {
+      try {
+        this.redis = new Redis(process.env.REDIS_URL, {
+          maxRetriesPerRequest: 3,
+          enableReadyCheck: true,
+        });
 
-    console.log('Database and Redis connected');
+        this.redis.on('error', (err) => {
+          console.error('Redis error:', err);
+        });
+
+        console.log('Redis connected');
+      } catch (error) {
+        console.warn('Redis connection failed (optional):', error);
+      }
+    } else {
+      console.log('Redis not configured (optional)');
+    }
   }
 
   async disconnect() {

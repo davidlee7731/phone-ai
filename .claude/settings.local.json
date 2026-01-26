@@ -11,7 +11,8 @@
       "WebFetch(domain:toastintegrations.redoc.ly)",
       "Bash(npx tsc:*)",
       "Bash(psql $DATABASE_URL -c \"SELECT phone_number, pos_system, pos_credentials FROM restaurants WHERE phone_number = ''+14695178245'';\")",
-      "Bash(node scripts/check-restaurant.js:*)"
+      "Bash(node scripts/check-restaurant.js:*)",
+      "Bash(railway logs:*)"
     ]
   }
 }
