@@ -23,13 +23,13 @@ class TwilioServiceClass {
 
     // Start media stream
     const connect = twiml.connect();
-    connect.stream({
+    const stream = connect.stream({
       url: `wss://${process.env.WEBHOOK_BASE_URL}/voice/stream`,
-      parameter: [
-        { name: 'To', value: to },
-        { name: 'From', value: from },
-      ],
     });
+
+    // Add custom parameters
+    stream.parameter({ name: 'To', value: to });
+    stream.parameter({ name: 'From', value: from });
 
     return twiml;
   }
