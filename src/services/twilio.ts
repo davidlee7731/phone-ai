@@ -23,7 +23,7 @@ class TwilioServiceClass {
 
     // Start media stream
     const connect = twiml.connect();
-    const stream = connect.stream({
+    connect.stream({
       url: `wss://${process.env.WEBHOOK_BASE_URL}/voice/stream`,
     });
 
