@@ -1,6 +1,5 @@
 import { EventEmitter } from 'events';
 import WebSocket from 'ws';
-import * as alawmulaw from 'alawmulaw';
 import { Database } from '../database/client';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY!;
@@ -72,8 +71,8 @@ export class OpenAIRealtimeService extends EventEmitter {
             modalities: ['text', 'audio'],
             instructions: this.getSystemInstructions(),
             voice: 'alloy',
-            input_audio_format: 'pcm16',
-            output_audio_format: 'pcm16',
+            input_audio_format: 'g711_ulaw',
+            output_audio_format: 'g711_ulaw',
             input_audio_transcription: {
               model: 'whisper-1',
             },
@@ -168,9 +167,10 @@ export class OpenAIRealtimeService extends EventEmitter {
         break;
 
       case 'response.audio.delta':
-        // Receive audio from OpenAI (PCM16 at 24kHz)
+        // Receive audio from OpenAI (mulaw format, same as Twilio!)
         const audioDelta = Buffer.from(event.delta, 'base64');
-        this.handleAudioFromOpenAI(audioDelta);
+        // Send directly to Twilio without conversion
+        this.emit('audio', audioDelta);
         break;
 
       case 'response.audio.done':
@@ -213,49 +213,16 @@ export class OpenAIRealtimeService extends EventEmitter {
 
   private processAudioInternal(audioBuffer: Buffer) {
     try {
-      // Convert mulaw to PCM16
-      const pcm16 = this.convertMulawToPCM16(audioBuffer);
-
-      // Send to OpenAI (PCM16 base64 encoded)
+      // Send mulaw directly to OpenAI (no conversion needed!)
       this.sendToOpenAI({
         type: 'input_audio_buffer.append',
-        audio: pcm16.toString('base64'),
+        audio: audioBuffer.toString('base64'),
       });
     } catch (error) {
       console.error('Error processing audio:', error);
     }
   }
 
-  private handleAudioFromOpenAI(pcm16Audio: Buffer) {
-    try {
-      // Convert PCM16 to mulaw for Twilio
-      const mulawAudio = this.convertPCM16ToMulaw(pcm16Audio);
-
-      // Emit to be sent back to Twilio
-      this.emit('audio', mulawAudio);
-    } catch (error) {
-      console.error('Error handling audio from OpenAI:', error);
-    }
-  }
-
-  private convertMulawToPCM16(mulawBuffer: Buffer): Buffer {
-    // Decode mulaw to 16-bit PCM
-    const pcm16 = alawmulaw.mulaw.decode(mulawBuffer);
-    return Buffer.from(pcm16.buffer);
-  }
-
-  private convertPCM16ToMulaw(pcm16Buffer: Buffer): Buffer {
-    // Convert buffer to Int16Array for mulaw encoding
-    const samples = new Int16Array(
-      pcm16Buffer.buffer,
-      pcm16Buffer.byteOffset,
-      pcm16Buffer.length / 2
-    );
-
-    // Encode to mulaw
-    const mulaw = alawmulaw.mulaw.encode(samples);
-    return Buffer.from(mulaw);
-  }
 
   private getSystemInstructions(): string {
     const menu = JSON.stringify(this.restaurant.menu, null, 2);
