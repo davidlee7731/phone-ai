@@ -41,6 +41,7 @@ voiceRouter.get('/task/:phoneNumber', async (req, res) => {
 });
 
 // Endpoint to get menu for a phone number (for Bland.ai knowledge base)
+// DEPRECATED: Use /menu-categories and /menu-items instead for better performance
 voiceRouter.get('/menu/:phoneNumber', async (req, res) => {
   try {
     const { phoneNumber } = req.params;
@@ -56,6 +57,71 @@ voiceRouter.get('/menu/:phoneNumber', async (req, res) => {
   } catch (error) {
     console.error('Error getting menu:', error);
     res.status(500).json({ error: 'Failed to get menu' });
+  }
+});
+
+// API Tool: Get menu categories
+// Bland.ai can call this to get a list of all menu categories
+voiceRouter.get('/menu-categories/:phoneNumber', async (req, res) => {
+  try {
+    const { phoneNumber } = req.params;
+    const categories = await BlandService.getMenuCategories(phoneNumber);
+
+    res.json({
+      categories,
+      count: categories.length
+    });
+  } catch (error) {
+    console.error('Error getting menu categories:', error);
+    res.status(500).json({ error: 'Failed to get menu categories' });
+  }
+});
+
+// API Tool: Get menu items in a category
+// Bland.ai can call this with ?category=Appetizers to get items in that category
+voiceRouter.get('/menu-items/:phoneNumber', async (req, res) => {
+  try {
+    const { phoneNumber } = req.params;
+    const { category } = req.query;
+
+    if (!category) {
+      return res.status(400).json({ error: 'Category parameter is required' });
+    }
+
+    const items = await BlandService.getMenuItems(phoneNumber, category as string);
+
+    res.json({
+      category,
+      items,
+      count: items.length
+    });
+  } catch (error) {
+    console.error('Error getting menu items:', error);
+    res.status(500).json({ error: 'Failed to get menu items' });
+  }
+});
+
+// API Tool: Search for a specific menu item by name
+// Bland.ai can call this with ?itemName=burger to search for items
+voiceRouter.get('/menu-search/:phoneNumber', async (req, res) => {
+  try {
+    const { phoneNumber } = req.params;
+    const { query } = req.query;
+
+    if (!query) {
+      return res.status(400).json({ error: 'Query parameter is required' });
+    }
+
+    const results = await BlandService.searchMenuItems(phoneNumber, query as string);
+
+    res.json({
+      query,
+      results,
+      count: results.length
+    });
+  } catch (error) {
+    console.error('Error searching menu:', error);
+    res.status(500).json({ error: 'Failed to search menu' });
   }
 });
 

@@ -518,6 +518,115 @@ This structured data is required for order processing. Include it even if the cu
   }
 
   /**
+   * Get menu categories for a restaurant
+   * API Tool: Returns list of category names for Bland.ai to query
+   */
+  async getMenuCategories(phoneNumber: string): Promise<string[]> {
+    const result = await Database.query(
+      'SELECT * FROM restaurants WHERE phone_number = $1',
+      [phoneNumber]
+    );
+
+    if (result.rows.length === 0) {
+      throw new Error(`No restaurant found for number ${phoneNumber}`);
+    }
+
+    const restaurant = result.rows[0];
+    const menu = await this.getRestaurantMenuDynamic(restaurant);
+
+    if (!menu || !menu.categories) {
+      return [];
+    }
+
+    return menu.categories.map((cat: any) => cat.name);
+  }
+
+  /**
+   * Get menu items in a specific category
+   * API Tool: Returns items with full details (name, price, description, modifiers)
+   */
+  async getMenuItems(phoneNumber: string, categoryName: string): Promise<any[]> {
+    const result = await Database.query(
+      'SELECT * FROM restaurants WHERE phone_number = $1',
+      [phoneNumber]
+    );
+
+    if (result.rows.length === 0) {
+      throw new Error(`No restaurant found for number ${phoneNumber}`);
+    }
+
+    const restaurant = result.rows[0];
+    const menu = await this.getRestaurantMenuDynamic(restaurant);
+
+    if (!menu || !menu.categories) {
+      return [];
+    }
+
+    // Find category (case-insensitive)
+    const category = menu.categories.find(
+      (cat: any) => cat.name.toLowerCase() === categoryName.toLowerCase()
+    );
+
+    if (!category) {
+      return [];
+    }
+
+    // Return items with all details
+    return category.items.map((item: any) => ({
+      name: item.name,
+      price: item.price,
+      description: item.description || '',
+      modifiers: item.modifiers || []
+    }));
+  }
+
+  /**
+   * Search menu items by name
+   * API Tool: Returns matching items across all categories
+   */
+  async searchMenuItems(phoneNumber: string, searchQuery: string): Promise<any[]> {
+    const result = await Database.query(
+      'SELECT * FROM restaurants WHERE phone_number = $1',
+      [phoneNumber]
+    );
+
+    if (result.rows.length === 0) {
+      throw new Error(`No restaurant found for number ${phoneNumber}`);
+    }
+
+    const restaurant = result.rows[0];
+    const menu = await this.getRestaurantMenuDynamic(restaurant);
+
+    if (!menu || !menu.categories) {
+      return [];
+    }
+
+    const results: any[] = [];
+    const query = searchQuery.toLowerCase();
+
+    // Search across all categories
+    for (const category of menu.categories) {
+      for (const item of category.items) {
+        // Match on item name or description
+        if (
+          item.name.toLowerCase().includes(query) ||
+          (item.description && item.description.toLowerCase().includes(query))
+        ) {
+          results.push({
+            name: item.name,
+            price: item.price,
+            description: item.description || '',
+            category: category.name,
+            modifiers: item.modifiers || []
+          });
+        }
+      }
+    }
+
+    return results;
+  }
+
+  /**
    * Format menu for Bland.ai knowledge base
    * Creates a compact, easy-to-parse format optimized for AI understanding
    */
