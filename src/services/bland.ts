@@ -575,7 +575,7 @@ This structured data is required for order processing. Include it even if the cu
             // menuText += `    ${required} ${modGroup.name} ${selections}:\n`;
 
             // Only show first few options to save space, indicate if there are more
-            const maxOptionsToShow = 8;
+            const maxOptionsToShow = 50;
             const optionsToShow = modGroup.options.slice(0, maxOptionsToShow);
             const hasMore = modGroup.options.length > maxOptionsToShow;
 
