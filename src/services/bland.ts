@@ -541,24 +541,30 @@ This structured data is required for order processing. Include it even if the cu
         menuText += `\n  • ${item.name} - $${price}\n`;
 
         // Description (truncated to 80 chars)
-        if (item.description && item.description.trim()) {
-          let description = item.description.trim();
-          if (description.length > 80) {
-            description = description.substring(0, 77) + '...';
-          }
-          menuText += `    ${description}\n`;
-        }
+        // if (item.description && item.description.trim()) {
+        //   let description = item.description.trim();
+        //   if (description.length > 80) {
+        //     description = description.substring(0, 77) + '...';
+        //   }
+        //   menuText += `    ${description}\n`;
+        // }
 
         // Modifiers - compact format
         if (item.modifiers && item.modifiers.length > 0) {
           for (const modGroup of item.modifiers) {
             totalModifiers++;
-            const required = modGroup.required ? '[REQUIRED]' : '[OPTIONAL]';
-            const selections = modGroup.multiSelect
-              ? `(${modGroup.minSelections}-${modGroup.maxSelections})`
-              : '(1)';
+            if (modGroup.required) {
+              menuText += `    '[REQUIRED selections. At least ${modGroup.minSelections} and up to ${modGroup.maxSelections} selections]' ${modGroup.name}:\n`;
+            } else {
+              menuText += `    '[OPTIONAL selections. At least ${modGroup.minSelections} and up to ${modGroup.maxSelections} selections]' ${modGroup.name}:\n`;
+            }
+            // const required = modGroup.required ? '[REQUIRED]' : '[OPTIONAL]';
+            // // const selections = modGroup.multiSelect ?
+            // const selections = modGroup.multiSelect
+            //   ? `(${modGroup.minSelections}-${modGroup.maxSelections})`
+            //   : '(1)';
 
-            menuText += `    ${required} ${modGroup.name} ${selections}:\n`;
+            // menuText += `    ${required} ${modGroup.name} ${selections}:\n`;
 
             // Only show first few options to save space, indicate if there are more
             const maxOptionsToShow = 8;
