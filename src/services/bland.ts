@@ -554,9 +554,17 @@ This structured data is required for order processing. Include it even if the cu
           for (const modGroup of item.modifiers) {
             totalModifiers++;
             if (modGroup.required) {
+              if (modGroup.minSelections === modGroup.maxSelections) {
+                menuText += `    '[${modGroup.minSelections} REQUIRED selection]' ${modGroup.name}:\n`;
+              } else {
               menuText += `    '[REQUIRED selections. At least ${modGroup.minSelections} and up to ${modGroup.maxSelections} selections]' ${modGroup.name}:\n`;
+            }
             } else {
-              menuText += `    '[OPTIONAL selections. At least ${modGroup.minSelections} and up to ${modGroup.maxSelections} selections]' ${modGroup.name}:\n`;
+              if (modGroup.minSelections === modGroup.maxSelections) {
+                menuText += `    '[Up to ${modGroup.maxSelections} OPTIONAL selection]' ${modGroup.name}:\n`;
+              } else {
+                menuText += `    '[OPTIONAL selections. At least ${modGroup.minSelections} and up to ${modGroup.maxSelections} selections]' ${modGroup.name}:\n`;
+              }
             }
             // const required = modGroup.required ? '[REQUIRED]' : '[OPTIONAL]';
             // // const selections = modGroup.multiSelect ?
