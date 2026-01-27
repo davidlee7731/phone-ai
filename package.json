@@ -12,6 +12,7 @@
     "db:update-toast": "node scripts/update-toast-credentials.js",
     "db:diagnose": "node scripts/diagnose-menu.js",
     "db:fix-pos": "node scripts/fix-pos-system.js",
+    "menu:simplify": "node scripts/simplify-menu.js",
     "test": "jest"
   },
   "keywords": [

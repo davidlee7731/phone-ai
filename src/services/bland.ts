@@ -223,23 +223,27 @@ This structured data is required for order processing. Include it even if the cu
 
       // Each menuGroup becomes a category
       for (const group of menu.menuGroups) {
-        // Skip hidden or unavailable groups
-        if (group.visibility === 'HIDDEN' || group.visibility === 'POS_ONLY') continue;
-        if (!group.items || group.items.length === 0) continue;
+        // Skip groups with no items (note: Toast uses 'menuItems' not 'items')
+        if (!group.menuItems || group.menuItems.length === 0) continue;
 
         // Filter and map items
-        const visibleItems = group.items
+        const visibleItems = group.menuItems
           .filter((item: any) => {
-            // Only include visible items that are available for online ordering
-            return item.visibility !== 'HIDDEN' &&
-                   item.visibility !== 'POS_ONLY' &&
-                   item.name && // Must have a name
-                   item.price !== undefined; // Must have a price
+            // Skip items without visibility array (hidden from ordering)
+            if (!item.visibility || !Array.isArray(item.visibility) || item.visibility.length === 0) {
+              return false;
+            }
+
+            // Only include items visible for online ordering
+            const isVisibleOnline = item.visibility.includes('TOAST_ONLINE_ORDERING') ||
+                                   item.visibility.includes('ORDERING_PARTNERS');
+
+            return isVisibleOnline && item.name && item.price !== undefined;
           })
           .map((item: any) => ({
             name: item.name,
             price: item.price || 0,
-            description: item.description || '',
+            description: item.description?.trim() || '',
           }));
 
         // Only add category if it has visible items
