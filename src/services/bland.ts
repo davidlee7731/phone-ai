@@ -208,12 +208,16 @@ This structured data is required for order processing. Include it even if the cu
 
   /**
    * Transform Toast API menu format to internal format expected by AI
-   * Filters out hidden/unavailable items and simplifies the structure
+   * Filters out hidden/unavailable items and includes modifiers
    */
   private transformToastMenuToInternalFormat(toastMenu: any): any {
     if (!toastMenu || !toastMenu.menus || toastMenu.menus.length === 0) {
       return { categories: [] };
     }
+
+    // Build lookup maps for modifiers
+    const modifierGroupsMap = toastMenu.modifierGroupReferences || {};
+    const modifierOptionsMap = toastMenu.modifierOptionReferences || {};
 
     const categories: any[] = [];
 
@@ -240,11 +244,72 @@ This structured data is required for order processing. Include it even if the cu
 
             return isVisibleOnline && item.name && item.price !== undefined;
           })
-          .map((item: any) => ({
-            name: item.name,
-            price: item.price || 0,
-            description: item.description?.trim() || '',
-          }));
+          .map((item: any) => {
+            const mappedItem: any = {
+              name: item.name,
+              price: item.price || 0,
+              description: item.description?.trim() || '',
+            };
+
+            // Resolve modifiers
+            if (item.modifierGroupReferences && item.modifierGroupReferences.length > 0) {
+              mappedItem.modifiers = [];
+
+              for (const groupRef of item.modifierGroupReferences) {
+                const modGroup = modifierGroupsMap[groupRef];
+                if (!modGroup) continue;
+
+                // Skip hidden modifier groups
+                if (modGroup.visibility && modGroup.visibility.length > 0) {
+                  const isGroupVisible = modGroup.visibility.includes('TOAST_ONLINE_ORDERING') ||
+                                        modGroup.visibility.includes('ORDERING_PARTNERS');
+                  if (!isGroupVisible) continue;
+                }
+
+                const simplifiedModGroup: any = {
+                  name: modGroup.name,
+                  required: modGroup.requiredMode === 'REQUIRED',
+                  minSelections: modGroup.minSelections || 0,
+                  maxSelections: modGroup.maxSelections || 999,
+                  multiSelect: modGroup.isMultiSelect || false,
+                  options: []
+                };
+
+                // Resolve modifier options
+                if (modGroup.modifierOptionReferences && modGroup.modifierOptionReferences.length > 0) {
+                  for (const optionRef of modGroup.modifierOptionReferences) {
+                    const modOption = modifierOptionsMap[optionRef];
+                    if (!modOption) continue;
+
+                    // Skip hidden options
+                    if (modOption.visibility && modOption.visibility.length > 0) {
+                      const isOptionVisible = modOption.visibility.includes('TOAST_ONLINE_ORDERING') ||
+                                             modOption.visibility.includes('ORDERING_PARTNERS');
+                      if (!isOptionVisible) continue;
+                    }
+
+                    simplifiedModGroup.options.push({
+                      name: modOption.name,
+                      price: modOption.price || 0,
+                      isDefault: modOption.isDefault || false
+                    });
+                  }
+                }
+
+                // Only add modifier group if it has options
+                if (simplifiedModGroup.options.length > 0) {
+                  mappedItem.modifiers.push(simplifiedModGroup);
+                }
+              }
+
+              // Remove modifiers array if empty
+              if (mappedItem.modifiers.length === 0) {
+                delete mappedItem.modifiers;
+              }
+            }
+
+            return mappedItem;
+          });
 
         // Only add category if it has visible items
         if (visibleItems.length > 0) {
@@ -463,6 +528,7 @@ This structured data is required for order processing. Include it even if the cu
 
     let menuText = `${restaurantName} MENU\n\n`;
     let totalItems = 0;
+    let totalModifiers = 0;
 
     for (const category of menu.categories) {
       menuText += `${category.name.toUpperCase()}:\n`;
@@ -471,17 +537,44 @@ This structured data is required for order processing. Include it even if the cu
         totalItems++;
         const price = typeof item.price === 'number' ? item.price.toFixed(2) : item.price;
 
-        // Truncate very long descriptions (keep under 100 chars)
-        let description = item.description?.trim() || '';
-        if (description.length > 100) {
-          description = description.substring(0, 97) + '...';
+        // Item name and price
+        menuText += `\n  • ${item.name} - $${price}\n`;
+
+        // Description (truncated to 80 chars)
+        if (item.description && item.description.trim()) {
+          let description = item.description.trim();
+          if (description.length > 80) {
+            description = description.substring(0, 77) + '...';
+          }
+          menuText += `    ${description}\n`;
         }
 
-        // Compact format: Name - $Price - Description (if available)
-        if (description) {
-          menuText += `  • ${item.name} - $${price} - ${description}\n`;
-        } else {
-          menuText += `  • ${item.name} - $${price}\n`;
+        // Modifiers - compact format
+        if (item.modifiers && item.modifiers.length > 0) {
+          for (const modGroup of item.modifiers) {
+            totalModifiers++;
+            const required = modGroup.required ? '[REQ]' : '[OPT]';
+            const selections = modGroup.multiSelect
+              ? `(${modGroup.minSelections}-${modGroup.maxSelections})`
+              : '(1)';
+
+            menuText += `    ${required} ${modGroup.name} ${selections}:\n`;
+
+            // Only show first few options to save space, indicate if there are more
+            const maxOptionsToShow = 8;
+            const optionsToShow = modGroup.options.slice(0, maxOptionsToShow);
+            const hasMore = modGroup.options.length > maxOptionsToShow;
+
+            for (const option of optionsToShow) {
+              const optPrice = option.price || 0;
+              const priceStr = optPrice === 0 ? '' : ` (+$${Math.abs(optPrice).toFixed(2)})`;
+              menuText += `      - ${option.name}${priceStr}\n`;
+            }
+
+            if (hasMore) {
+              menuText += `      ... and ${modGroup.options.length - maxOptionsToShow} more options\n`;
+            }
+          }
         }
       }
 
@@ -490,11 +583,13 @@ This structured data is required for order processing. Include it even if the cu
 
     // Log menu size for monitoring
     const menuSizeKB = Math.round(menuText.length / 1024);
-    console.log(`Menu formatted: ${totalItems} items across ${menu.categories.length} categories, ${menuSizeKB}KB`);
+    console.log(`Menu formatted: ${totalItems} items, ${totalModifiers} modifier groups, ${menuSizeKB}KB`);
 
     // Warn if menu is very large
-    if (menuSizeKB > 50) {
-      console.warn(`⚠️  Menu is large (${menuSizeKB}KB). Consider further filtering or simplification.`);
+    if (menuSizeKB > 100) {
+      console.warn(`⚠️  Menu is large (${menuSizeKB}KB). May be difficult for AI to process.`);
+    } else if (menuSizeKB > 50) {
+      console.log(`ℹ️  Menu is moderately large (${menuSizeKB}KB) but should be OK.`);
     }
 
     return menuText;
