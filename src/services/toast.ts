@@ -65,9 +65,13 @@ interface CachedMenu {
 }
 
 interface ToastAuthResponse {
-  accessToken: string;
-  tokenType: string;
-  expiresIn: number;
+  '@class': string;
+  token: {
+    tokenType: string;
+    scope: string | null;
+    expiresIn: number;
+    accessToken: string;
+  };
 }
 
 interface CachedAuthToken {
@@ -129,15 +133,15 @@ class ToastServiceClass {
 
       // Cache the token (subtract 5 minutes for safety margin)
       const now = Date.now();
-      const expiresIn = (data.expiresIn - 300) * 1000; // Convert to ms and subtract 5 min
+      const expiresIn = (data.token.expiresIn - 300) * 1000; // Convert to ms and subtract 5 min
 
       this.authTokenCache.set(cacheKey, {
-        token: data.accessToken,
+        token: data.token.accessToken,
         expiresAt: now + expiresIn,
       });
 
-      console.log(`Toast auth successful, token expires in ${data.expiresIn}s`);
-      return data.accessToken;
+      console.log(`Toast auth successful, token expires in ${data.token.expiresIn}s`);
+      return data.token.accessToken;
     } catch (error) {
       console.error('Error authenticating with Toast:', error);
       throw error;
