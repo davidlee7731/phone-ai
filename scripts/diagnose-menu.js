@@ -10,7 +10,8 @@ async function diagnoseMenu() {
 
     // Check environment variables
     console.log('1. Environment Variables:');
-    console.log('   TOAST_API_KEY:', process.env.TOAST_API_KEY ? `Set (${process.env.TOAST_API_KEY.substring(0, 10)}...)` : '❌ NOT SET');
+    console.log('   TOAST_CLIENT_ID:', process.env.TOAST_CLIENT_ID ? `✓ Set (${process.env.TOAST_CLIENT_ID.substring(0, 10)}...)` : '❌ NOT SET');
+    console.log('   TOAST_CLIENT_SECRET:', process.env.TOAST_CLIENT_SECRET ? `✓ Set (${process.env.TOAST_CLIENT_SECRET.substring(0, 10)}...)` : '❌ NOT SET');
     console.log('   TOAST_RESTAURANT_GUID:', process.env.TOAST_RESTAURANT_GUID ? `✓ Set (${process.env.TOAST_RESTAURANT_GUID})` : '❌ NOT SET');
     console.log('   DATABASE_URL:', process.env.DATABASE_URL ? '✓ Set' : '❌ NOT SET');
 
@@ -43,7 +44,8 @@ async function diagnoseMenu() {
 
       console.log('   Raw credentials object:', JSON.stringify(credentials, null, 2));
       console.log('\n   Credential Check:');
-      console.log('   - toast_api_key:', credentials.toast_api_key ? `✓ Set (${credentials.toast_api_key.substring(0, 10)}...)` : '❌ NOT SET');
+      console.log('   - toast_client_id:', credentials.toast_client_id ? `✓ Set (${credentials.toast_client_id.substring(0, 10)}...)` : '❌ NOT SET');
+      console.log('   - toast_client_secret:', credentials.toast_client_secret ? `✓ Set (${credentials.toast_client_secret.substring(0, 10)}...)` : '❌ NOT SET');
       console.log('   - toast_restaurant_guid:', credentials.toast_restaurant_guid ? `✓ Set (${credentials.toast_restaurant_guid})` : '❌ NOT SET');
       console.log('   - itsacheckmate_api_key:', credentials.itsacheckmate_api_key ? '✓ Set' : '❌ NOT SET');
       console.log('   - itsacheckmate_restaurant_guid:', credentials.itsacheckmate_restaurant_guid ? '✓ Set' : '❌ NOT SET');
@@ -55,15 +57,17 @@ async function diagnoseMenu() {
     console.log('\n4. Condition Checks (why Toast API might not be used):');
     const posSystemCheck = restaurant.pos_system === 'toast';
     const hasCredentials = !!restaurant.pos_credentials;
-    const hasToastApiKey = credentials && !!credentials.toast_api_key;
+    const hasToastClientId = credentials && !!credentials.toast_client_id;
+    const hasToastClientSecret = credentials && !!credentials.toast_client_secret;
     const hasToastGuid = credentials && !!credentials.toast_restaurant_guid;
 
     console.log('   ✓ restaurant.pos_system === "toast":', posSystemCheck ? '✓ PASS' : '❌ FAIL');
     console.log('   ✓ restaurant.pos_credentials exists:', hasCredentials ? '✓ PASS' : '❌ FAIL');
-    console.log('   ✓ credentials.toast_api_key exists:', hasToastApiKey ? '✓ PASS' : '❌ FAIL');
+    console.log('   ✓ credentials.toast_client_id exists:', hasToastClientId ? '✓ PASS' : '❌ FAIL');
+    console.log('   ✓ credentials.toast_client_secret exists:', hasToastClientSecret ? '✓ PASS' : '❌ FAIL');
     console.log('   ✓ credentials.toast_restaurant_guid exists:', hasToastGuid ? '✓ PASS' : '❌ FAIL');
 
-    const allChecksPass = posSystemCheck && hasCredentials && hasToastApiKey && hasToastGuid;
+    const allChecksPass = posSystemCheck && hasCredentials && hasToastClientId && hasToastClientSecret && hasToastGuid;
 
     console.log('\n5. Final Diagnosis:');
     if (allChecksPass) {
@@ -80,9 +84,13 @@ async function diagnoseMenu() {
       if (!posSystemCheck) {
         console.log('   1. Update pos_system to "toast"');
       }
-      if (!hasCredentials || !hasToastApiKey || !hasToastGuid) {
-        console.log('   2. Run: npm run db:update-toast');
-        console.log('      OR manually update pos_credentials with Toast API keys');
+      if (!hasCredentials || !hasToastClientId || !hasToastClientSecret || !hasToastGuid) {
+        console.log('   2. Set Railway environment variables:');
+        console.log('      - TOAST_CLIENT_ID');
+        console.log('      - TOAST_CLIENT_SECRET');
+        console.log('      - TOAST_RESTAURANT_GUID');
+        console.log('   3. Run: npm run db:update-toast');
+        console.log('      OR manually update pos_credentials with Toast API credentials');
       }
     }
 

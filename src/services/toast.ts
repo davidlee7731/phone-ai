@@ -64,18 +64,91 @@ interface CachedMenu {
   expiresAt: number;
 }
 
+interface ToastAuthResponse {
+  accessToken: string;
+  tokenType: string;
+  expiresIn: number;
+}
+
+interface CachedAuthToken {
+  token: string;
+  expiresAt: number;
+}
+
 class ToastServiceClass {
   private availabilityCache = new Map<string, CachedAvailability>();
   private menuCache = new Map<string, CachedMenu>();
+  private authTokenCache = new Map<string, CachedAuthToken>();
   private readonly AVAILABILITY_CACHE_DURATION_MS = 10 * 60 * 1000; // 10 minutes (Toast recommendation)
   private readonly MENU_CACHE_DURATION_MS = 60 * 60 * 1000; // 1 hour (menus change less frequently)
   private readonly TOAST_API_BASE = 'https://ws-api.toasttab.com';
 
   /**
+   * Authenticate with Toast API and get an access token
+   * Caches the token until it expires
+   */
+  private async getAccessToken(clientId: string, clientSecret: string): Promise<string> {
+    // Check if we have a cached valid token
+    const cacheKey = `${clientId}:${clientSecret}`;
+    const cached = this.authTokenCache.get(cacheKey);
+
+    if (cached && Date.now() < cached.expiresAt) {
+      console.log('Using cached Toast auth token');
+      return cached.token;
+    }
+
+    try {
+      console.log('Authenticating with Toast API...');
+      const response = await fetch(
+        `${this.TOAST_API_BASE}/authentication/v1/authentication/login`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            clientId,
+            clientSecret,
+            userAccessType: 'TOAST_MACHINE_CLIENT',
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        let errorDetails = '';
+        try {
+          const errorBody = await response.text();
+          errorDetails = errorBody ? ` - ${errorBody}` : '';
+        } catch (e) {
+          // Ignore
+        }
+        throw new Error(`Toast auth error: ${response.status} ${response.statusText}${errorDetails}`);
+      }
+
+      const data = await response.json() as ToastAuthResponse;
+
+      // Cache the token (subtract 5 minutes for safety margin)
+      const now = Date.now();
+      const expiresIn = (data.expiresIn - 300) * 1000; // Convert to ms and subtract 5 min
+
+      this.authTokenCache.set(cacheKey, {
+        token: data.accessToken,
+        expiresAt: now + expiresIn,
+      });
+
+      console.log(`Toast auth successful, token expires in ${data.expiresIn}s`);
+      return data.accessToken;
+    } catch (error) {
+      console.error('Error authenticating with Toast:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Check if a restaurant is currently open/available
    * Caches result for 10 minutes as recommended by Toast
    */
-  async isRestaurantOpen(restaurantGuid: string, apiKey: string): Promise<boolean> {
+  async isRestaurantOpen(restaurantGuid: string, clientId: string, clientSecret: string): Promise<boolean> {
     // Check cache first
     const cached = this.availabilityCache.get(restaurantGuid);
     if (cached && Date.now() < cached.expiresAt) {
@@ -84,13 +157,16 @@ class ToastServiceClass {
     }
 
     try {
+      // Get access token
+      const accessToken = await this.getAccessToken(clientId, clientSecret);
+
       // Fetch from Toast API
       const response = await fetch(
         `${this.TOAST_API_BASE}/restaurant-availability/v1/availability/${restaurantGuid}`,
         {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${apiKey}`,
+            'Authorization': `Bearer ${accessToken}`,
             'Toast-Restaurant-External-ID': restaurantGuid,
             'Content-Type': 'application/json',
           },
@@ -138,7 +214,7 @@ class ToastServiceClass {
    * Caches result for 1 hour since menus change less frequently
    * Returns fully resolved menu with groups, items, and modifiers
    */
-  async getRestaurantMenu(restaurantGuid: string, apiKey: string): Promise<ToastMenusResponse> {
+  async getRestaurantMenu(restaurantGuid: string, clientId: string, clientSecret: string): Promise<ToastMenusResponse> {
     // Check cache first
     const cached = this.menuCache.get(restaurantGuid);
     if (cached && Date.now() < cached.expiresAt) {
@@ -147,6 +223,9 @@ class ToastServiceClass {
     }
 
     try {
+      // Get access token
+      const accessToken = await this.getAccessToken(clientId, clientSecret);
+
       // Fetch from Toast API
       // Note: restaurantGuid is passed as query parameter for Config API v2
       const response = await fetch(
@@ -154,7 +233,7 @@ class ToastServiceClass {
         {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${apiKey}`,
+            'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
           },
         }
@@ -199,14 +278,17 @@ class ToastServiceClass {
    * Get restaurant schedules and business hours
    * Returns detailed schedule information for the week
    */
-  async getRestaurantSchedules(restaurantGuid: string, apiKey: string) {
+  async getRestaurantSchedules(restaurantGuid: string, clientId: string, clientSecret: string) {
     try {
+      // Get access token
+      const accessToken = await this.getAccessToken(clientId, clientSecret);
+
       const response = await fetch(
         `${this.TOAST_API_BASE}/restaurants/v1/restaurants/${restaurantGuid}`,
         {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${apiKey}`,
+            'Authorization': `Bearer ${accessToken}`,
             'Toast-Restaurant-External-ID': restaurantGuid,
             'Content-Type': 'application/json',
           },

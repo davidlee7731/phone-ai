@@ -178,12 +178,13 @@ This structured data is required for order processing. Include it even if the cu
           ? JSON.parse(restaurant.pos_credentials)
           : restaurant.pos_credentials;
 
-        // Check if we have Toast API credentials
-        if (credentials.toast_api_key && credentials.toast_restaurant_guid) {
+        // Check if we have Toast API credentials (clientId and clientSecret)
+        if (credentials.toast_client_id && credentials.toast_client_secret && credentials.toast_restaurant_guid) {
           console.log(`Fetching menu from Toast API for restaurant ${restaurant.id}`);
           const toastMenu = await ToastService.getRestaurantMenu(
             credentials.toast_restaurant_guid,
-            credentials.toast_api_key
+            credentials.toast_client_id,
+            credentials.toast_client_secret
           );
 
           // Transform Toast menu format to internal format
@@ -252,12 +253,13 @@ This structured data is required for order processing. Include it even if the cu
           ? JSON.parse(restaurant.pos_credentials)
           : restaurant.pos_credentials;
 
-        // Check if we have Toast API credentials
-        if (credentials.toast_api_key && credentials.toast_restaurant_guid) {
+        // Check if we have Toast API credentials (clientId and clientSecret)
+        if (credentials.toast_client_id && credentials.toast_client_secret && credentials.toast_restaurant_guid) {
           console.log(`Checking Toast API for restaurant ${restaurant.id} availability`);
           const isOpen = await ToastService.isRestaurantOpen(
             credentials.toast_restaurant_guid,
-            credentials.toast_api_key
+            credentials.toast_client_id,
+            credentials.toast_client_secret
           );
           return isOpen;
         } else if (credentials.itsacheckmate_restaurant_guid) {
