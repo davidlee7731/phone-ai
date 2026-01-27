@@ -316,35 +316,6 @@ class ToastServiceClass {
     }
   }
 
-  /**
-   * Get online ordering schedule
-   * Returns takeout and delivery hours
-   */
-  async getOnlineOrderingSchedule(restaurantGuid: string, apiKey: string) {
-    try {
-      const response = await fetch(
-        `${this.TOAST_API_BASE}/config/v2/orderingSchedule`,
-        {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Toast-Restaurant-External-ID': restaurantGuid,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Toast API error: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('Error fetching Toast ordering schedule:', error);
-      throw error;
-    }
-  }
 
   /**
    * Clear availability and menu cache for a specific restaurant or all restaurants
