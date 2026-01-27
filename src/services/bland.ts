@@ -208,6 +208,7 @@ This structured data is required for order processing. Include it even if the cu
 
   /**
    * Transform Toast API menu format to internal format expected by AI
+   * Filters out hidden/unavailable items and simplifies the structure
    */
   private transformToastMenuToInternalFormat(toastMenu: any): any {
     if (!toastMenu || !toastMenu.menus || toastMenu.menus.length === 0) {
@@ -222,19 +223,32 @@ This structured data is required for order processing. Include it even if the cu
 
       // Each menuGroup becomes a category
       for (const group of menu.menuGroups) {
+        // Skip hidden or unavailable groups
+        if (group.visibility === 'HIDDEN' || group.visibility === 'POS_ONLY') continue;
         if (!group.items || group.items.length === 0) continue;
 
-        const category = {
-          name: group.name,
-          items: group.items.map((item: any) => ({
-            id: item.guid,
+        // Filter and map items
+        const visibleItems = group.items
+          .filter((item: any) => {
+            // Only include visible items that are available for online ordering
+            return item.visibility !== 'HIDDEN' &&
+                   item.visibility !== 'POS_ONLY' &&
+                   item.name && // Must have a name
+                   item.price !== undefined; // Must have a price
+          })
+          .map((item: any) => ({
             name: item.name,
             price: item.price || 0,
             description: item.description || '',
-          }))
-        };
+          }));
 
-        categories.push(category);
+        // Only add category if it has visible items
+        if (visibleItems.length > 0) {
+          categories.push({
+            name: group.name,
+            items: visibleItems
+          });
+        }
       }
     }
 
@@ -435,40 +449,49 @@ This structured data is required for order processing. Include it even if the cu
   }
 
   /**
-   * Format menu for Bland.ai knowledge base (more detailed than AI prompt format)
+   * Format menu for Bland.ai knowledge base
+   * Creates a compact, easy-to-parse format optimized for AI understanding
    */
   private formatMenuForKnowledgeBase(menu: any, restaurantName: string): string {
-    if (!menu || !menu.categories) {
+    if (!menu || !menu.categories || menu.categories.length === 0) {
       return `${restaurantName} Menu\n\nNo menu items available at this time.`;
     }
 
-    let menuText = `${restaurantName} - Complete Menu\n\n`;
-    menuText += `This is the current menu with all available items, prices, and descriptions.\n\n`;
-    menuText += `==========================================\n\n`;
+    let menuText = `${restaurantName} MENU\n\n`;
+    let totalItems = 0;
 
     for (const category of menu.categories) {
-      menuText += `## ${category.name}\n\n`;
+      menuText += `${category.name.toUpperCase()}:\n`;
 
       for (const item of category.items) {
-        menuText += `### ${item.name}\n`;
-        menuText += `Price: $${typeof item.price === 'number' ? item.price.toFixed(2) : item.price}\n`;
+        totalItems++;
+        const price = typeof item.price === 'number' ? item.price.toFixed(2) : item.price;
 
-        if (item.description) {
-          menuText += `Description: ${item.description}\n`;
+        // Truncate very long descriptions (keep under 100 chars)
+        let description = item.description?.trim() || '';
+        if (description.length > 100) {
+          description = description.substring(0, 97) + '...';
         }
 
-        if (item.id) {
-          menuText += `Item ID: ${item.id}\n`;
+        // Compact format: Name - $Price - Description (if available)
+        if (description) {
+          menuText += `  • ${item.name} - $${price} - ${description}\n`;
+        } else {
+          menuText += `  • ${item.name} - $${price}\n`;
         }
-
-        menuText += `\n`;
       }
 
       menuText += `\n`;
     }
 
-    menuText += `==========================================\n\n`;
-    menuText += `Note: All prices are in USD. Menu is updated automatically from our POS system.\n`;
+    // Log menu size for monitoring
+    const menuSizeKB = Math.round(menuText.length / 1024);
+    console.log(`Menu formatted: ${totalItems} items across ${menu.categories.length} categories, ${menuSizeKB}KB`);
+
+    // Warn if menu is very large
+    if (menuSizeKB > 50) {
+      console.warn(`⚠️  Menu is large (${menuSizeKB}KB). Consider further filtering or simplification.`);
+    }
 
     return menuText;
   }
