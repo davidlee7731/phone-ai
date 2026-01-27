@@ -223,6 +223,7 @@ This structured data is required for order processing. Include it even if the cu
 
     // Iterate through all menus (restaurants often have just one active menu)
     for (const menu of toastMenu.menus) {
+      console.log('ssssssssssssssssssssss:\n'+menu)
       if (!menu.menuGroups) continue;
 
       // Each menuGroup becomes a category
