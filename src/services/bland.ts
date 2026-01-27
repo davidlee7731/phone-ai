@@ -553,7 +553,7 @@ This structured data is required for order processing. Include it even if the cu
         if (item.modifiers && item.modifiers.length > 0) {
           for (const modGroup of item.modifiers) {
             totalModifiers++;
-            const required = modGroup.required ? '[REQ]' : '[OPT]';
+            const required = modGroup.required ? '[REQUIRED]' : '[OPTIONAL]';
             const selections = modGroup.multiSelect
               ? `(${modGroup.minSelections}-${modGroup.maxSelections})`
               : '(1)';
@@ -567,7 +567,9 @@ This structured data is required for order processing. Include it even if the cu
 
             for (const option of optionsToShow) {
               const optPrice = option.price || 0;
-              const priceStr = optPrice === 0 ? '' : ` (+$${Math.abs(optPrice).toFixed(2)})`;
+              //const priceStr = optPrice === 0 ? '' : ` (+$${Math.abs(optPrice).toFixed(2)})`;
+              const priceStr = optPrice > 0 ? ` (+$${Math.abs(optPrice).toFixed(2)})` : optPrice < 0 ? ` (-$${Math.abs(optPrice).toFixed(2)})` : ''
+
               menuText += `      - ${option.name}${priceStr}\n`;
             }
 
