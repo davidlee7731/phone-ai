@@ -238,6 +238,7 @@ class ToastServiceClass {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${accessToken}`,
+            'Toast-Restaurant-External-ID': restaurantGuid,
             'Content-Type': 'application/json',
           },
         }
