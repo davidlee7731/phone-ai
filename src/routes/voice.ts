@@ -65,7 +65,9 @@ voiceRouter.post('/toast-menu-webhook', async (req, res) => {
   try {
     console.log('Received Toast menu webhook:', JSON.stringify(req.body, null, 2));
 
-    const { eventType, restaurantGuid, publishedDate } = req.body;
+    const { eventType, details } = req.body;
+
+    const { restaurantGuid, publishedDate } = details
 
     // Verify this is a menu update event
     if (eventType !== 'menus_updated') {
