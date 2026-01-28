@@ -221,8 +221,24 @@ This structured data is required for order processing. Include it even if the cu
 
     const categories: any[] = [];
 
-    // Iterate through all menus (restaurants often have just one active menu)
-    for (const menu of toastMenu.menus) {
+    // Filter menus by whitelist if configured
+    const menuWhitelist = process.env.TOAST_MENU_WHITELIST
+      ? process.env.TOAST_MENU_WHITELIST.split(',').map((name: string) => name.trim().toLowerCase())
+      : null;
+
+    const filteredMenus = menuWhitelist
+      ? toastMenu.menus.filter((menu: any) => menuWhitelist.includes(menu.name?.toLowerCase()))
+      : toastMenu.menus;
+
+    if (menuWhitelist) {
+      const allMenuNames = toastMenu.menus.map((m: any) => m.name);
+      console.log(`Toast menu whitelist active. All menus: [${allMenuNames.join(', ')}]. Using: [${filteredMenus.map((m: any) => m.name).join(', ')}]`);
+    } else {
+      const allMenuNames = toastMenu.menus.map((m: any) => m.name);
+      console.log(`No TOAST_MENU_WHITELIST set. Available menus: [${allMenuNames.join(', ')}]`);
+    }
+
+    for (const menu of filteredMenus) {
       if (!menu.menuGroups) continue;
 
       // Each menuGroup becomes a category
