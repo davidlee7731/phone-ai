@@ -6,6 +6,12 @@ import { Database } from '../database/client';
 
 export const voiceRouter = express.Router();
 
+// Normalize phone number: ensure it starts with + regardless of encoding
+function normalizePhone(phone: string): string {
+  const decoded = decodeURIComponent(phone);
+  return decoded.startsWith('+') ? decoded : `+${decoded}`;
+}
+
 // Webhook endpoint for Bland.ai to send call events
 voiceRouter.post('/bland-webhook', async (req, res) => {
   try {
@@ -24,7 +30,7 @@ voiceRouter.post('/bland-webhook', async (req, res) => {
 // This can be used by Bland.ai to fetch dynamic prompts
 voiceRouter.get('/task/:phoneNumber', async (req, res) => {
   try {
-    const { phoneNumber } = req.params;
+    const phoneNumber = normalizePhone(req.params.phoneNumber);
     const task = await BlandService.getRestaurantTask(phoneNumber);
 
     // If requesting as plain text (for copy-paste), return text
@@ -44,7 +50,7 @@ voiceRouter.get('/task/:phoneNumber', async (req, res) => {
 // DEPRECATED: Use /menu-categories and /menu-items instead for better performance
 voiceRouter.get('/menu/:phoneNumber', async (req, res) => {
   try {
-    const { phoneNumber } = req.params;
+    const phoneNumber = normalizePhone(req.params.phoneNumber);
     const menu = await BlandService.getRestaurantMenu(phoneNumber);
 
     // If requesting as plain text (for Bland.ai knowledge base), return formatted text
@@ -64,7 +70,7 @@ voiceRouter.get('/menu/:phoneNumber', async (req, res) => {
 // Bland.ai can call this to get a list of all menu categories
 voiceRouter.get('/menu-categories/:phoneNumber', async (req, res) => {
   try {
-    const { phoneNumber } = req.params;
+    const phoneNumber = normalizePhone(req.params.phoneNumber);
     const categories = await BlandService.getMenuCategories(phoneNumber);
 
     res.json({
@@ -81,7 +87,7 @@ voiceRouter.get('/menu-categories/:phoneNumber', async (req, res) => {
 // Bland.ai can call this with ?category=Appetizers to get items in that category
 voiceRouter.get('/menu-items/:phoneNumber', async (req, res) => {
   try {
-    const { phoneNumber } = req.params;
+    const phoneNumber = normalizePhone(req.params.phoneNumber);
     const { category } = req.query;
 
     if (!category) {
@@ -105,7 +111,7 @@ voiceRouter.get('/menu-items/:phoneNumber', async (req, res) => {
 // Bland.ai can call this with ?itemName=burger to search for items
 voiceRouter.get('/menu-search/:phoneNumber', async (req, res) => {
   try {
-    const { phoneNumber } = req.params;
+    const phoneNumber = normalizePhone(req.params.phoneNumber);
     const { query } = req.query;
 
     if (!query) {

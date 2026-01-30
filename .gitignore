@@ -34,6 +34,7 @@ logs/
 # Testing
 coverage/
 .nyc_output/
+tmp_writer.js
 
 # Temporary files
 tmp/
