@@ -937,6 +937,23 @@ This structured data is required for order processing. Include it even if the cu
       throw error;
     }
   }
+  /**
+   * Get raw menu data for order parsing
+   * Returns the internal menu format (categories/items/modifiers) for use by FuzzyMenuMatcher
+   */
+  async getMenuForParsing(phoneNumber: string): Promise<any> {
+    const result = await Database.query(
+      'SELECT * FROM restaurants WHERE phone_number = $1',
+      [phoneNumber]
+    );
+
+    if (result.rows.length === 0) {
+      throw new Error(`No restaurant found for number ${phoneNumber}`);
+    }
+
+    const restaurant = result.rows[0];
+    return await this.getRestaurantMenuDynamic(restaurant);
+  }
 }
 
 export const BlandService = new BlandServiceClass();

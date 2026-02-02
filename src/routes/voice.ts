@@ -3,6 +3,7 @@ import { BlandService } from '../services/bland';
 import { CallService } from '../services/calls';
 import { ToastService } from '../services/toast';
 import { Database } from '../database/client';
+import { FuzzyMenuMatcher } from '../services/fuzzy-menu-matcher';
 
 export const voiceRouter = express.Router();
 
@@ -131,6 +132,28 @@ voiceRouter.get('/menu-search/:phoneNumber', async (req, res) => {
   }
 });
 
+// API Tool: Parse customer order speech into structured item + modifiers
+// Uses fuzzy matching to handle inexact item names and modifier extraction
+voiceRouter.post('/parse-order/:phoneNumber', async (req, res) => {
+  try {
+    const phoneNumber = normalizePhone(req.params.phoneNumber);
+    const { speech } = req.body;
+
+    if (!speech || typeof speech !== 'string') {
+      return res.status(400).json({ error: 'speech parameter is required' });
+    }
+
+    const menu = await BlandService.getMenuForParsing(phoneNumber);
+    const matcher = FuzzyMenuMatcher.getOrCreate(phoneNumber, menu);
+    const result = matcher.parseOrder(speech);
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error parsing order:', error);
+    res.status(500).json({ error: 'Failed to parse order' });
+  }
+});
+
 // Webhook endpoint for Toast menu updates
 // Toast will call this when a restaurant publishes menu changes
 voiceRouter.post('/toast-menu-webhook', async (req, res) => {
@@ -179,9 +202,10 @@ voiceRouter.post('/toast-menu-webhook', async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // Clear Toast API cache for this restaurant
+    // Clear Toast API cache and fuzzy matcher cache for this restaurant
     ToastService.clearCache(restaurantGuid);
-    console.log(`Cleared Toast API cache for ${restaurantGuid}`);
+    FuzzyMenuMatcher.clearCache();
+    console.log(`Cleared Toast API cache and fuzzy matcher cache for ${restaurantGuid}`);
 
     // Optionally: fetch and cache the new menu immediately (warm the cache)
     try {

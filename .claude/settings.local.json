@@ -17,7 +17,8 @@
       "Bash(node -e:*)",
       "Bash(node:*)",
       "Bash(python3 -c \"import json; open\\(r''c:\\\\Users\\\\David\\\\Documents\\\\Github\\\\claude\\\\phone-agent\\\\tmp_writer.py'',''w''\\).write\\(''import json,pathlib\\\\n''\\)\")",
-      "Bash(python -m json.tool:*)"
+      "Bash(python -m json.tool:*)",
+      "Bash(python:*)"
     ]
   }
 }
