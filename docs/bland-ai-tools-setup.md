@@ -203,6 +203,79 @@ In your Bland.ai dashboard:
 }
 ```
 
+#### Tool 4: Parse Order (Fuzzy Match)
+
+```json
+{
+  "name": "parse_order",
+  "description": "Parse what the customer said they want to order. Fuzzy-matches their speech to the closest menu item and extracts modifiers. ALWAYS use this when the customer says what they want to order, before confirming the item. Pass the customer's exact words as the speech parameter.",
+  "url": "https://phone-ai-production.up.railway.app/voice/parse-order/+14695178245",
+  "method": "POST",
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "body": {
+    "speech": "{{input.speech}}"
+  },
+  "parameters": [
+    {
+      "name": "speech",
+      "type": "string",
+      "required": true,
+      "description": "The customer's exact words describing what they want to order (e.g., 'large chicken parm with extra cheese')"
+    }
+  ]
+}
+```
+
+**Example Response** (success):
+```json
+{
+  "success": true,
+  "match": {
+    "item": {
+      "name": "Chicken Parmesan",
+      "price": 14.99,
+      "category": "Entrees",
+      "description": "Breaded chicken breast with marinara and mozzarella"
+    },
+    "confidence": 0.85,
+    "matchedModifiers": [
+      { "groupName": "Add Extras", "optionName": "Extra Cheese", "optionPrice": 1.50 }
+    ],
+    "remainingRequiredModifiers": [
+      {
+        "groupName": "Side Choice",
+        "required": true,
+        "options": [
+          { "name": "Fries", "price": 0, "isDefault": true },
+          { "name": "Salad", "price": 0, "isDefault": false }
+        ]
+      }
+    ],
+    "calculatedPrice": 16.49
+  },
+  "alternativeMatches": []
+}
+```
+
+**Example Response** (no strong match):
+```json
+{
+  "success": false,
+  "match": null,
+  "alternativeMatches": [
+    { "name": "Chicken Parmesan", "confidence": 0.45, "category": "Entrees" },
+    { "name": "Chicken Piccata", "confidence": 0.40, "category": "Entrees" }
+  ],
+  "error": "No strong match found. Did you mean one of the alternatives?"
+}
+```
+
+**When to use**: EVERY TIME a customer says what they want to order. This ensures accurate item matching and correct pricing.
+
+---
+
 ### Step 2: Update Your Bland.ai Agent Instructions
 
 Add this to your agent's system prompt:
@@ -222,6 +295,12 @@ You have access to three tools to query our menu dynamically:
 3. **search_menu**: Search for specific items
    - Use when customer asks for specific item: "do you have chicken?"
    - Searches across all categories
+
+4. **parse_order**: Parse and fuzzy-match customer order speech
+   - ALWAYS use this when the customer says what they want to order
+   - Pass their exact words: "I'll have a chicken parm with extra cheese"
+   - Returns the matched item, modifiers, price, and any required modifiers you still need to ask about
+   - If no strong match, returns alternatives to ask the customer about
 
 IMPORTANT - How to Handle Modifiers:
 When an item has modifiers, you MUST ask the customer about each one:
@@ -244,9 +323,9 @@ Customer: "Lunch sandwiches"
 AI: [Calls get_menu_items with category="Lunch Sandwiches"] "We have Turkey Club for $12.99, Grilled Chicken for $11.99, and BLT for $9.99. What would you like?"
 
 Customer: "I'll take the Turkey Club"
-AI: [Reads modifiers from previous response] "Great choice! What type of bread: white, whole wheat, or sourdough (+$1)?"
+AI: [Calls parse_order with speech="Turkey Club"] "Great choice! The Turkey Club is $12.99. What type of bread would you like: white, whole wheat, or sourdough (+$1)?"
 
-Customer: "Whole wheat"
+Customer: "Whole wheat please"
 AI: "Perfect. Would you like to add any extras? Extra cheese is $1.50 or avocado is $2."
 
 Customer: "Add avocado"
@@ -315,20 +394,31 @@ AI: [search_menu query="bacon"] "Yes! We have:
 Which would you like?"
 ```
 
-### Example 3: Handling Modifiers
+### Example 3: Handling Orders with Fuzzy Matching
 
 ```
-Customer: "I'll take a burger"
-AI: [search_menu query="burger"] "We have the Classic Burger for $11.99. How would you like it cooked: rare, medium, or well-done?"
+Customer: "I'll take a burger with cheese and bacon"
+AI: [parse_order speech="burger with cheese and bacon"]
+    → Returns: matched "Classic Burger" ($11.99), matched modifiers: Cheese (+$1), Bacon (+$2), remaining required: Cooking Temp, Bun Choice
+AI: "I've got you a Classic Burger with cheese and bacon. How would you like it cooked: rare, medium, or well-done?"
 
 Customer: "Medium"
 AI: "Great. What type of bun: regular, wheat, or gluten-free (+$2)?"
 
 Customer: "Regular"
-AI: "Perfect. Would you like to add any toppings? Cheese (+$1), bacon (+$2), avocado (+$2), or mushrooms (+$1.50)?"
-
-Customer: "Add cheese and bacon"
 AI: "Excellent. One Classic Burger, medium, on regular bun with cheese and bacon. Your total is $14.99. Will that be for pickup or delivery?"
+```
+
+### Example 4: Fuzzy Match with No Strong Match
+
+```
+Customer: "Can I get a chick parm"
+AI: [parse_order speech="chick parm"]
+    → Returns: success=true, matched "Chicken Parmesan" with confidence 0.82
+AI: "Did you mean the Chicken Parmesan for $14.99?"
+
+Customer: "Yeah that's it"
+AI: "Great! What side would you like: fries or salad?"
 ```
 
 ---
