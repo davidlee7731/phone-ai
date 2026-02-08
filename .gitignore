@@ -35,6 +35,8 @@ logs/
 coverage/
 .nyc_output/
 tmp_writer.js
+scripts/
+claude/
 
 # Temporary files
 tmp/

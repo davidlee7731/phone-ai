@@ -18,7 +18,8 @@
       "Bash(node:*)",
       "Bash(python3 -c \"import json; open\\(r''c:\\\\Users\\\\David\\\\Documents\\\\Github\\\\claude\\\\phone-agent\\\\tmp_writer.py'',''w''\\).write\\(''import json,pathlib\\\\n''\\)\")",
       "Bash(python -m json.tool:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(BLAND_API_KEY=org_d7dab482f8810343461913949427fdb77c8253ae71f6927b1f6284b668e9c090b8b3ad2a8d522e7a84c769 node:*)"
     ]
   }
 }

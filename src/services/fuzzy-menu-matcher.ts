@@ -2,6 +2,7 @@ import Fuse from 'fuse.js';
 
 interface MenuItem {
   name: string;
+  normalizedName: string;  // Normalized for searching (& -> and, etc)
   price: number;
   description: string;
   category: string;
@@ -69,7 +70,8 @@ export class FuzzyMenuMatcher {
     this.allItems = this.flattenMenu(menu);
     this.fuseIndex = new Fuse(this.allItems, {
       keys: [
-        { name: 'name', weight: 0.7 },
+        // Search normalized name for better matching (& -> and, etc)
+        { name: 'normalizedName', weight: 0.7 },
         { name: 'description', weight: 0.3 },
       ],
       threshold: 0.4,
@@ -101,7 +103,10 @@ export class FuzzyMenuMatcher {
     for (const category of menu.categories) {
       for (const item of category.items) {
         items.push({
+          // Store original name for display, but Fuse will search the normalized version
           name: item.name,
+          // Add normalized name for searching (& -> and, etc)
+          normalizedName: this.normalizeForIndex(item.name),
           price: item.price,
           description: item.description || '',
           category: category.name,
@@ -214,11 +219,27 @@ export class FuzzyMenuMatcher {
   private normalizeSpeech(speech: string): string[] {
     const cleaned = speech
       .toLowerCase()
+      // Normalize & to "and" before stripping special chars
+      .replace(/\s*&\s*/g, ' and ')
       .replace(/[^a-z0-9\s'-]/g, '')
       .replace(/\s+/g, ' ')
       .trim();
 
     return cleaned.split(' ').filter(word => !FILLER_WORDS.has(word) && word.length > 0);
+  }
+
+  // Normalize text for consistent matching (used for both menu items and queries)
+  private normalizeForIndex(text: string): string {
+    const cleaned = text
+      .toLowerCase()
+      // Normalize & to "and"
+      .replace(/\s*&\s*/g, ' and ')
+      .replace(/[^a-z0-9\s'-]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // Also remove filler words for consistent matching with speech normalization
+    return cleaned.split(' ').filter(word => !FILLER_WORDS.has(word) && word.length > 0).join(' ');
   }
 
   private findBestSubPhraseMatch(tokens: string[]): { item: MenuItem; score: number; usedTokens: string[] } | null {
