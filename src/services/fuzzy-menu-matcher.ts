@@ -59,6 +59,15 @@ const FILLER_WORDS = new Set([
   'so', 'just', 'also', 'do', 'you', 'to', 'for', 'my', 'on', 'in'
 ]);
 
+// Common speech-to-text transcription errors
+// Maps misheard words to their correct spellings
+const TRANSCRIPTION_FIXES: Record<string, string> = {
+  'filly': 'philly',
+  'fillie': 'philly',
+  'phily': 'philly',
+  'fily': 'philly',
+};
+
 // Cache of matchers per phone number
 const matcherCache = new Map<string, FuzzyMenuMatcher>();
 
@@ -225,7 +234,10 @@ export class FuzzyMenuMatcher {
       .replace(/\s+/g, ' ')
       .trim();
 
-    return cleaned.split(' ').filter(word => !FILLER_WORDS.has(word) && word.length > 0);
+    return cleaned.split(' ')
+      .filter(word => !FILLER_WORDS.has(word) && word.length > 0)
+      // Fix common speech-to-text transcription errors
+      .map(word => TRANSCRIPTION_FIXES[word] || word);
   }
 
   // Normalize text for consistent matching (used for both menu items and queries)
